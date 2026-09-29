@@ -1,0 +1,100 @@
+@startuml 02-backend-modules
+' ShopSphere - UML component diagram of the backend (modular monolith).
+' Shows business modules, their provided interfaces (public module APIs),
+' synchronous dependencies and asynchronous communication through events.
+skinparam componentStyle uml2
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam linetype polyline
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam component {
+  BackgroundColor #F4F7FC
+  BorderColor #2F5496
+}
+skinparam interface {
+  BackgroundColor #FFFFFF
+  BorderColor #2F5496
+}
+skinparam package {
+  BorderColor #8EA9DB
+}
+
+interface "REST API /api/v1" as IRest
+
+component "ShopSphere Backend" <<Spring Boot 4.1 application>> {
+  component "Web & Security Layer" <<REST controllers, JWT filter, role checks>> as web
+
+  package "Business modules" as front {
+    component "Identity" <<module>> as identity
+    component "Catalog" <<module>> as catalog
+    component "Cart" <<module>> as cart
+    component "Ordering" <<module>> as ordering
+    component "Reviews" <<module>> as reviews
+    component "Administration\n& Analytics" <<module>> as admin
+  }
+
+  interface "CatalogApi" as ICatalog
+  interface "CartApi" as ICart
+  interface "OrderingApi" as IOrdering
+  interface "SettingsApi" as ISettings
+  interface "InventoryApi" as IInventory
+  interface "PaymentApi" as IPayment
+  interface "DeliveryApi" as IDelivery
+
+  package "Supporting modules" as back {
+    component "Inventory" <<module>> as inventory
+    component "Payment" <<module>> as payment
+    component "Delivery" <<module>> as delivery
+    component "Notification" <<module>> as notification
+  }
+
+  component "Domain Event Bus" <<Spring application events + outbox table>> as bus
+}
+
+IRest - web
+web --> front : calls application\nservices of modules
+web --> back : stock, pickup points,\npayment webhook
+
+' horizontal order hints
+identity -[hidden]right- catalog
+catalog -[hidden]right- cart
+cart -[hidden]right- ordering
+ordering -[hidden]right- reviews
+reviews -[hidden]right- admin
+inventory -[hidden]right- payment
+payment -[hidden]right- delivery
+delivery -[hidden]right- notification
+
+' provided interfaces
+catalog -down- ICatalog
+cart -down- ICart
+ordering -down- IOrdering
+admin -down- ISettings
+inventory -up- IInventory
+payment -up- IPayment
+delivery -up- IDelivery
+
+' synchronous dependencies (required interfaces)
+cart ..> ICatalog : prices,\nvariants
+ordering ..> ICart : cart,\npromo code
+reviews ..> IOrdering : delivered to\ncustomer?
+admin ..> IOrdering : sales\nstatistics
+cart ..> IInventory : available qty
+ordering ..> IInventory : reserve / commit /\nrelease
+ordering ..> IPayment : start payment /\nrefund
+ordering ..> IDelivery : delivery cost
+delivery .up.> ISettings : delivery prices,\nfree-shipping threshold
+
+' asynchronous communication (publish / subscribe)
+back -[hidden]down- bus
+identity ..> bus : publish
+ordering ..> bus : publish
+payment ..> bus : publish
+inventory ..> bus : publish
+bus ..> notification : deliver
+bus ..> admin : deliver (audit log)
+bus ..> ordering : deliver (payment results)
+
+@enduml

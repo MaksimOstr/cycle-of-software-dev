@@ -1,0 +1,74 @@
+@startuml 01-component-diagram
+' ShopSphere - high-level UML component diagram (system level).
+' Shows the client application, the backend, data stores and external
+' services together with the interfaces and protocols between them.
+skinparam componentStyle uml2
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 70
+skinparam component {
+  BackgroundColor #F4F7FC
+  BorderColor #2F5496
+}
+skinparam interface {
+  BackgroundColor #FFFFFF
+  BorderColor #2F5496
+}
+skinparam database {
+  BackgroundColor #FFF8E7
+  BorderColor #B7862B
+}
+skinparam package {
+  BorderColor #8EA9DB
+}
+left to right direction
+
+actor "Guest /\nCustomer" as customer
+actor "Manager /\nAdministrator" as staff
+
+package "Client tier (web browser)" {
+  component "ShopSphere Web App" <<React 19 SPA>> as spa {
+    component "Storefront UI" as storefront
+    component "Management Panel UI" as panel
+  }
+}
+
+package "Application tier" {
+  interface "REST API\n/api/v1 (OpenAPI 3)" as IRest
+  interface "Payment webhook\n/api/v1/payments/webhook" as IWebhook
+  component "ShopSphere Backend" <<Spring Boot 4.1 modular monolith>> as backend
+}
+
+package "Data tier" {
+  database "PostgreSQL 17\n(business data)" as db
+  component "Amazon S3" <<object storage>> as s3
+}
+
+package "External services" {
+  component "Stripe" <<payment provider>> as stripe
+  component "Nova Poshta API" <<delivery provider>> as np
+  component "SMTP email service" as smtp
+  component "Google Identity" <<OAuth 2.0 / OIDC>> as google
+}
+
+customer --> storefront : HTTPS
+staff --> panel : HTTPS
+
+storefront ..> IRest : REST/JSON over HTTPS,\nJWT bearer token
+panel ..> IRest : REST/JSON over HTTPS,\nJWT bearer token
+IRest -- backend
+IWebhook -- backend
+stripe ..> IWebhook : HTTPS POST,\nsigned event
+
+spa ..> s3 : HTTPS GET\n(static files, images)
+
+backend ..> db : JDBC over TLS\n(Spring Data JPA, Flyway)
+backend ..> s3 : AWS SDK over HTTPS\n(upload images)
+backend ..> stripe : HTTPS REST\n(Checkout Session, Refund)
+backend ..> np : HTTPS JSON (API 2.0)\n(cities and branches)
+backend ..> smtp : SMTP + STARTTLS\n(transactional emails)
+backend ..> google : OpenID Connect\nover HTTPS
+
+@enduml
