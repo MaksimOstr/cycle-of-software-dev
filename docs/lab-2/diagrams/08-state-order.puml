@@ -1,0 +1,50 @@
+@startuml 08-state-order
+' ShopSphere - UML state machine diagram of the Order lifecycle.
+' States and rules come from requirements "Order history and tracking",
+' "Stock reservation", "Order cancellation", "Return request" and
+' "Order status emails" of the Requirements Specification.
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam nodesep 60
+skinparam ranksep 60
+skinparam state {
+  BackgroundColor #F4F7FC
+  BorderColor #2F5496
+  ArrowColor #1F3864
+}
+
+state "New" as New : entry / send "order created" email
+state "Paid" as Paid : entry / send "order paid" email
+state "Processing" as Processing
+state "Shipped" as Shipped : entry / send email with tracking number
+state "Delivered" as Delivered : entry / send "order delivered" email
+state "Cancelled" as Cancelled : entry / send "order cancelled" email
+state "Returned" as Returned
+
+[*] --> New : order placed /\nreserve stock
+
+New --> Paid : payment succeeded\n[payment method = card online] /\ncommit reservation
+New --> Processing : manager confirms order\n[payment method = cash on delivery] /\ncommit reservation
+Paid --> Processing : manager starts processing
+Processing --> Shipped : manager ships order\n(tracking number)
+Shipped --> Delivered : delivery confirmed
+
+New --> Cancelled : payment deadline (30 min) passed\n[card online and unpaid] /\nrelease reservation
+New --> Cancelled : cancelled by customer or manager /\nrelease reservation
+Paid --> Cancelled : cancelled by customer or manager /\nrestock, refund
+Processing --> Cancelled : cancelled by customer or manager /\nrestock, refund if paid
+
+Delivered --> Returned : return completed\n[within 14 days after delivery] /\nrestock returned items, refund
+Delivered --> [*] : [14 days after delivery\nwithout return]
+Cancelled --> [*]
+Returned --> [*]
+
+note right of Processing
+  Before shipment (New, Paid, Processing) a manager
+  can edit items, quantities and the delivery address:
+  totals are recalculated and the customer is notified;
+  the status does not change.
+end note
+
+@enduml
