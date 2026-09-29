@@ -1,0 +1,81 @@
+@startuml 03-deployment-diagram
+' ShopSphere - UML deployment diagram.
+' Shows the physical/cloud nodes, the artifacts deployed on them and the
+' communication paths with their protocols.
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam node {
+  BackgroundColor #F4F7FC
+  BorderColor #2F5496
+}
+skinparam artifact {
+  BackgroundColor #FFFFFF
+  BorderColor #2F5496
+}
+skinparam database {
+  BackgroundColor #FFF8E7
+  BorderColor #B7862B
+}
+skinparam rectangle {
+  BorderColor #8EA9DB
+  BackgroundColor #FFFFFF
+}
+left to right direction
+
+node "Client device\n(PC / smartphone)" <<device>> as client {
+  node "Web browser" <<execution environment>> as browser {
+    artifact "ShopSphere SPA\n(HTML, JS, CSS bundle)" as spaArt
+  }
+}
+
+rectangle "AWS cloud (region eu-central-1)" as aws {
+  node "Amazon CloudFront" <<CDN>> as cdn
+
+  node "Amazon S3" <<storage service>> as s3 {
+    artifact "frontend bucket\n(SPA build)" as feBucket
+    artifact "images bucket\n(product images)" as imgBucket
+  }
+
+  node "Application Load Balancer" <<HTTPS :443>> as alb
+
+  node "Auto Scaling group\n(2 availability zones)" as asg {
+    node "EC2 instance [2..N]" <<device>> as ec2 {
+      node "Docker Engine" <<execution environment>> as docker {
+        artifact "shopsphere-backend\n(Docker image, Spring Boot JAR)" as beArt
+      }
+    }
+  }
+
+  node "Amazon RDS for PostgreSQL 17\n(Multi-AZ: primary + standby)" <<database service>> as rds {
+    database "shopsphere\ndatabase" as dbArt
+  }
+
+  node "AWS Secrets Manager" <<service>> as secrets
+  node "Amazon CloudWatch" <<service>> as cw
+}
+
+rectangle "External systems (Internet)" as ext {
+  node "Stripe" <<external system>> as stripe
+  node "Nova Poshta API" <<external system>> as np
+  node "SMTP email service" <<external system>> as smtp
+  node "Google Identity" <<external system>> as google
+}
+
+browser -- cdn : HTTPS (TLS 1.2+)\nstatic files, images
+cdn -- s3 : HTTPS\n(origin access)
+browser -- alb : HTTPS (TLS 1.2+)\nREST/JSON /api/v1
+stripe -- alb : HTTPS\npayment webhooks
+alb -- ec2 : HTTP :8080\n(private subnet)\nhealth check /actuator/health
+ec2 -- rds : TCP :5432\nJDBC over TLS
+ec2 -- s3 : HTTPS\n(AWS SDK)
+ec2 -- secrets : HTTPS\n(read secrets at startup)
+ec2 -- cw : HTTPS\n(logs, metrics)
+ec2 -- stripe : HTTPS REST\n(Checkout Session, refunds)
+ec2 -- np : HTTPS JSON\n(API 2.0)
+ec2 -- smtp : SMTP :587\n(STARTTLS)
+ec2 -- google : HTTPS\n(OpenID Connect)
+
+@enduml
