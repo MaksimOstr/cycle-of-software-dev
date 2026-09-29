@@ -1,0 +1,71 @@
+@startuml 07-sequence-payment-result
+' ShopSphere - UML sequence diagram, part 2: handling the payment result
+' (successful payment via webhook, or automatic cancellation after 30 minutes).
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 190
+skinparam sequence {
+  ParticipantBackgroundColor #F4F7FC
+  ParticipantBorderColor #2F5496
+  ActorBorderColor #2F5496
+  ActorBackgroundColor #F4F7FC
+  LifeLineBorderColor #8EA9DB
+  GroupBorderColor #8EA9DB
+  GroupHeaderFontColor #1F3864
+}
+skinparam database {
+  BackgroundColor #FFF8E7
+  BorderColor #B7862B
+}
+autonumber
+
+actor "Customer" as customer
+participant "Storefront UI\n(React SPA)" as ui
+participant "Stripe" as stripe
+participant ":PaymentService" as payment
+participant ":OrderService" as orders
+participant ":InventoryApi" as inventory
+database "PostgreSQL" as db
+participant ":Notification" as notif
+participant "SMTP email\nservice" as smtp
+
+alt payment succeeded
+  stripe -> payment ++ : POST /api/v1/payments/webhook\n(checkout.session.completed,\nStripe-Signature header)
+  payment -> payment : verify signature
+  payment -> db : INSERT processed_webhook_event(eventId)
+  alt event was already processed (duplicate delivery)
+    payment --> stripe : 200 OK (ignored)
+  else first delivery
+    payment -> db : payment status = SUCCEEDED\n+ outbox event PaymentSucceeded
+    payment ->> orders : PaymentSucceeded domain event\n(asynchronous, after commit)
+    payment --> stripe -- : 200 OK
+    activate orders
+    orders -> db : order.markPaid():\nNEW -> PAID + outbox event OrderPaid
+    orders -> inventory ++ : commit(orderId)
+    inventory -> db : on_hand -= qty, reserved -= qty
+    return
+    deactivate orders
+    notif -> db : read outbox event OrderPaid
+    notif -> smtp : "order paid" email
+  end
+  stripe -> ui : redirect to the success page
+  ui --> customer : show order number and status PAID\n(loaded with GET /api/v1/orders/{number})
+else not paid within 30 minutes
+  [-> orders ++ : scheduled expireUnpaidOrders()\n(every minute)
+  orders -> payment ++ : cancelPayment(orderId)
+  payment -> stripe : POST /v1/checkout/sessions/{id}/expire
+  return
+  orders -> inventory ++ : release(orderId)
+  inventory -> db : reserved -= qty
+  return
+  orders -> db : order.cancel():\nNEW -> CANCELLED\n+ outbox event OrderCancelled
+  deactivate orders
+  notif -> db : read outbox event OrderCancelled
+  notif -> smtp : "order cancelled" email
+  note over orders, inventory : If a PaymentSucceeded event later arrives for a CANCELLED order,\nOrderService calls PaymentApi.refund(orderId): no order is charged\nwithout reserved goods.
+end
+
+@enduml
