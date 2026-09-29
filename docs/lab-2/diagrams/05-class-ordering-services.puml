@@ -1,0 +1,133 @@
+@startuml 05-class-ordering-services
+' ShopSphere - UML class diagram, view 2: application services of the Ordering
+' module and the interfaces/classes of the modules it collaborates with.
+' The members of Order are shown in view 1 (04-class-order-model).
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 35
+skinparam ranksep 50
+skinparam class {
+  BackgroundColor #F4F7FC
+  BorderColor #2F5496
+  ArrowColor #1F3864
+}
+skinparam package {
+  BorderColor #8EA9DB
+}
+hide empty members
+hide circle
+left to right direction
+
+package "Ordering module" {
+  class CheckoutService <<application service>> {
+    + placeOrder(cmd: PlaceOrderCommand, idempotencyKey: String): CheckoutResult
+  }
+
+  class OrderService <<application service>> {
+    + changeStatus(orderId: UUID, target: OrderStatus, actor: Actor, trackingNumber: String [0..1]): void
+    + cancelOrder(orderId: UUID, actor: Actor, reason: String): void
+    + requestReturn(orderId: UUID, items: List<ReturnLine>, reason: String): ReturnRequest
+    + onPaymentSucceeded(event: PaymentSucceeded): void
+    + expireUnpaidOrders(): void
+  }
+
+  interface OrderRepository <<interface>> {
+    + findById(id: UUID): Optional<Order>
+    + findByIdempotencyKey(key: String): Optional<Order>
+    + findUnpaidCreatedBefore(time: Instant): List<Order>
+    + save(order: Order): Order
+  }
+
+  class Order <<aggregate root>>
+}
+
+package "Cart module" {
+  interface CartApi <<interface>> {
+    + getCheckoutCart(cartId: UUID): CartSnapshot
+    + redeemPromoCode(code: String, orderId: UUID): Money
+  }
+}
+
+package "Delivery module" {
+  interface DeliveryApi <<interface>> {
+    + calculateCost(method: DeliveryMethod, destination: String, subtotal: Money): Money
+  }
+}
+
+package "Inventory module" {
+  interface InventoryApi <<interface>> {
+    + reserve(orderId: UUID, lines: List<StockLine>, expiresAt: Instant [0..1]): void
+    + commit(orderId: UUID): void
+    + release(orderId: UUID): void
+    + restock(orderId: UUID): void
+  }
+
+  class InventoryService <<application service>>
+
+  class StockItem {
+    - variantId: UUID
+    - onHand: int
+    - reserved: int
+    - lowStockThreshold: int = 5
+    - version: long
+    + available(): int
+  }
+
+  class StockReservation {
+    - id: UUID
+    - orderId: UUID
+    - quantity: int
+    - status: ReservationStatus
+    - expiresAt: Instant [0..1]
+  }
+}
+
+package "Payment module" {
+  interface PaymentApi <<interface>> {
+    + startPayment(request: PaymentRequest): PaymentSession
+    + cancelPayment(orderId: UUID): void
+    + refund(orderId: UUID): void
+  }
+
+  class PaymentService <<application service>> {
+    + handleWebhook(payload: String, signature: String): void
+  }
+
+  class Payment {
+    - id: UUID
+    - orderId: UUID
+    - providerSessionId: String
+    - amount: Money
+    - status: PaymentStatus
+    - createdAt: Instant
+  }
+
+  class ProcessedWebhookEvent {
+    - eventId: String
+    - receivedAt: Instant
+  }
+}
+
+CheckoutService ..> OrderRepository
+OrderService ..> OrderRepository
+OrderRepository ..> Order : stores
+
+CheckoutService ..> CartApi : <<use>>
+CheckoutService ..> DeliveryApi : <<use>>
+CheckoutService ..> InventoryApi : <<use>>
+CheckoutService ..> PaymentApi : <<use>>
+OrderService ..> InventoryApi : <<use>>
+OrderService ..> PaymentApi : <<use>>
+
+InventoryService ..|> InventoryApi
+InventoryService ..> StockItem
+InventoryService ..> StockReservation
+StockReservation "0..*" --> "1" StockItem : reserves
+
+PaymentService ..|> PaymentApi
+PaymentService ..> Payment
+PaymentService ..> ProcessedWebhookEvent : deduplicates events
+
+@enduml
