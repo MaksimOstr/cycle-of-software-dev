@@ -1,0 +1,71 @@
+@startuml 06-sequence-place-order
+' ShopSphere - UML sequence diagram, part 1: placing an order with online
+' card payment (usage scenario 1 from the Requirements Elicitation document).
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 190
+skinparam sequence {
+  ParticipantBackgroundColor #F4F7FC
+  ParticipantBorderColor #2F5496
+  ActorBorderColor #2F5496
+  ActorBackgroundColor #F4F7FC
+  LifeLineBorderColor #8EA9DB
+  GroupBorderColor #8EA9DB
+  GroupHeaderFontColor #1F3864
+}
+skinparam database {
+  BackgroundColor #FFF8E7
+  BorderColor #B7862B
+}
+autonumber
+
+actor "Customer" as customer
+participant "Storefront UI\n(React SPA)" as ui
+participant ":CheckoutController" as ctrl
+participant ":CheckoutService" as checkout
+participant ":DeliveryApi" as delivery
+participant ":InventoryApi" as inventory
+participant ":PaymentApi" as payment
+database "PostgreSQL" as db
+participant "Stripe" as stripe
+
+customer -> ui : confirm order (contacts, Nova Poshta branch, card payment)
+ui -> ctrl ++ : POST /api/v1/orders\nIdempotency-Key: <uuid>
+ctrl -> checkout ++ : placeOrder(cmd, idempotencyKey)
+checkout -> db : find order by idempotencyKey
+
+alt order with this key already exists (repeated request)
+  checkout --> ctrl : existing CheckoutResult
+else new order
+  checkout -> delivery ++ : calculateCost(NOVA_POSHTA, branch, subtotal)
+  return deliveryCost
+
+  group database transaction
+    checkout -> inventory ++ : reserve(orderId, lines,\nexpiresAt = now + 30 min)
+    inventory -> db : reserved += qty\nwhere on_hand - reserved >= qty
+    break not enough stock for a variant
+      inventory --> checkout : OutOfStockException
+      checkout --> ctrl : error (transaction rolled back)
+      ctrl --> ui : 409 Conflict
+      ui --> customer : show "Only N left" message
+    end
+    return reserved
+    checkout -> db : INSERT order (status NEW,\npaymentDeadline = now + 30 min)\n+ outbox event OrderPlaced
+  end
+
+  checkout -> payment ++ : startPayment(orderId, total)
+  payment -> stripe ++ : POST /v1/checkout/sessions\n(expires_at = now + 30 min,\nIdempotency-Key = orderId)
+  return session id, payment page URL
+  payment -> db : INSERT payment (status PENDING)
+  return PaymentSession
+  checkout --> ctrl -- : CheckoutResult(orderNumber, paymentUrl)
+end
+ctrl --> ui -- : 201 Created {orderNumber, paymentUrl}
+ui -> stripe : redirect to the Stripe payment page
+customer -> stripe : enter card data and pay
+note over stripe : Card data is entered only on\nthe Stripe page and never\nreaches ShopSphere (PCI DSS).
+
+@enduml
