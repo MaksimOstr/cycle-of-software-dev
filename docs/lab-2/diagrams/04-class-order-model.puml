@@ -1,0 +1,142 @@
+@startuml 04-class-order-model
+' ShopSphere - UML class diagram, view 1: domain model of the Ordering module
+' (the Order aggregate with its parts, value objects and enumerations).
+skinparam defaultFontName Calibri
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam nodesep 30
+skinparam ranksep 45
+skinparam class {
+  BackgroundColor #F4F7FC
+  BorderColor #2F5496
+  ArrowColor #1F3864
+}
+skinparam package {
+  BorderColor #8EA9DB
+}
+hide empty members
+hide circle
+
+package "Ordering module - domain model" {
+  class Order <<aggregate root>> {
+    - id: UUID
+    - number: String
+    - idempotencyKey: String
+    - customerId: UUID [0..1]
+    - status: OrderStatus
+    - paymentMethod: PaymentMethod
+    - promoCode: String [0..1]
+    - subtotal: Money
+    - discount: Money
+    - deliveryCost: Money
+    - total: Money
+    - createdAt: Instant
+    - paymentDeadline: Instant [0..1]
+    - deliveredAt: Instant [0..1]
+    + markPaid(): void
+    + startProcessing(actor: Actor): void
+    + ship(trackingNumber: String, actor: Actor): void
+    + markDelivered(actor: Actor): void
+    + cancel(actor: Actor, reason: String): void
+    + markReturned(actor: Actor): void
+    + canBeCancelled(): boolean
+    + isReturnAllowed(now: Instant): boolean
+    - changeStatus(target: OrderStatus, actor: Actor, comment: String): void
+    - recalculateTotals(): void
+  }
+
+  class OrderItem {
+    - variantId: UUID
+    - sku: String
+    - productName: String
+    - unitPrice: Money
+    - quantity: int
+    + lineTotal(): Money
+  }
+
+  class OrderStatusChange {
+    - fromStatus: OrderStatus [0..1]
+    - toStatus: OrderStatus
+    - changedBy: UUID [0..1]
+    - changedAt: Instant
+    - comment: String [0..1]
+  }
+
+  class ContactInfo <<value object>> {
+    - fullName: String
+    - email: String
+    - phone: String
+  }
+
+  class DeliveryInfo <<value object>> {
+    - method: DeliveryMethod
+    - address: String [0..1]
+    - novaPoshtaBranchRef: String [0..1]
+    - pickupPointId: UUID [0..1]
+    - trackingNumber: String [0..1]
+  }
+
+  class ReturnRequest {
+    - id: UUID
+    - reason: String
+    - status: ReturnStatus
+    - createdAt: Instant
+  }
+
+  class ReturnItem {
+    - quantity: int
+  }
+
+  class Money <<value object>> {
+    - amount: BigDecimal
+    - currency: String = "UAH"
+    + add(other: Money): Money
+    + subtract(other: Money): Money
+    + multiply(factor: int): Money
+  }
+
+  enum OrderStatus <<enumeration>> {
+    NEW
+    PAID
+    PROCESSING
+    SHIPPED
+    DELIVERED
+    CANCELLED
+    RETURNED
+  }
+
+  enum PaymentMethod <<enumeration>> {
+    CARD_ONLINE
+    CASH_ON_DELIVERY
+  }
+
+  enum DeliveryMethod <<enumeration>> {
+    COURIER
+    NOVA_POSHTA
+    STORE_PICKUP
+  }
+
+  enum ReturnStatus <<enumeration>> {
+    REQUESTED
+    APPROVED
+    REJECTED
+    COMPLETED
+  }
+}
+
+Order "1" *-- "1..*" OrderItem : items
+Order "1" *-- "1..*" OrderStatusChange : history
+Order "1" *-- "1" ContactInfo : contact
+Order "1" *-- "1" DeliveryInfo : delivery
+Order "1" *-- "0..*" ReturnRequest : returns
+ReturnRequest "1" *-- "1..*" ReturnItem : items
+ReturnItem "0..*" --> "1" OrderItem : returned item
+
+Order ..> OrderStatus
+Order ..> PaymentMethod
+Order ..> Money
+DeliveryInfo ..> DeliveryMethod
+ReturnRequest ..> ReturnStatus
+
+@enduml
