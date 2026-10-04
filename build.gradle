@@ -6,7 +6,7 @@ plugins {
 
 group = 'com'
 version = '0.0.1-SNAPSHOT'
-description = 'cycle-of-software-dev'
+description = 'ShopSphere - online store (modular monolith)'
 
 java {
     toolchain {
@@ -18,9 +18,24 @@ repositories {
     mavenCentral()
 }
 
+// Production code stays in /src (src/main/java), tests are kept in the top-level /tests folder
+// as required by the repository structure of the project.
+sourceSets {
+    test {
+        java {
+            srcDirs = ['tests/java']
+        }
+        resources {
+            srcDirs = ['tests/resources']
+        }
+    }
+}
+
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
