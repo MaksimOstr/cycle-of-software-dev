@@ -162,6 +162,50 @@ class ShopApiIntegrationTest {
     }
 
     @Test
+    void customerOrderIsVisibleOnlyToItsOwnerAndStaff() throws Exception {
+        String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
+        String orderNumber = placeOrder(variantId, customer.id().toString());
+        UserView otherCustomer = registration.register(
+                new RegisterUserCommand("other" + System.nanoTime() + "@example.com", "Other", "Other12345"));
+
+        mvc.perform(get("/api/v1/orders/" + orderNumber)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, otherCustomer.id())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, customer.id())).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, manager.id())).andExpect(status().isOk());
+    }
+
+    @Test
+    void guestTracksOrderWithTheEmailUsedAtCheckout() throws Exception {
+        String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
+        String orderNumber = placeOrder(variantId, null);
+
+        mvc.perform(get("/api/v1/orders/" + orderNumber)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).param("email", "someone@example.com"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).param("email", "PETRO@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.number").value(orderNumber));
+    }
+
+    private String placeOrder(String variantId, String userId) throws Exception {
+        MockHttpServletRequestBuilder createCart = post("/api/v1/carts");
+        if (userId != null) {
+            createCart.header(USER, userId);
+        }
+        String cartId = read(mvc.perform(createCart).andExpect(status().isCreated()), "$.cartId");
+        mvc.perform(json(post("/api/v1/carts/" + cartId + "/items"), "{\"variantId\":\"" + variantId + "\",\"quantity\":1}"))
+                .andExpect(status().isOk());
+        MockHttpServletRequestBuilder order = json(post("/api/v1/orders"), """
+                {"cartId":"%s","fullName":"Petro","email":"petro@example.com","phone":"+380501234567",
+                 "deliveryMethod":"STORE_PICKUP","paymentMethod":"CASH_ON_DELIVERY"}""".formatted(cartId))
+                .header("Idempotency-Key", UUID.randomUUID().toString());
+        if (userId != null) {
+            order.header(USER, userId);
+        }
+        return read(mvc.perform(order).andExpect(status().isCreated()), "$.orderNumber");
+    }
+
+    @Test
     void registersAndLogsIn() throws Exception {
         String email = "new" + System.nanoTime() + "@example.com";
         mvc.perform(json(post("/api/v1/auth/register"),

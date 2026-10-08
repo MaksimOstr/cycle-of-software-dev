@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -87,10 +88,32 @@ public class OrderController {
         return checkout.placeOrder(command, idempotencyKey);
     }
 
-    /** Order tracking by number (shown on the success page and in emails). */
+    /**
+     * Order tracking by number. Order numbers are sequential and easy to guess, so a customer's order is shown
+     * only to its owner and to staff; a guest order is shown to whoever knows the email used at checkout.
+     */
     @GetMapping("/orders/{number}")
-    public OrderResponse getOrder(@PathVariable String number) {
-        return OrderResponse.of(orderQueries.getByNumber(number));
+    public OrderResponse getOrder(@PathVariable String number,
+                                  @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
+                                  @RequestParam(required = false) String email) {
+        Order order = orderQueries.getByNumber(number);
+        requireAccess(order, userId, email);
+        return OrderResponse.of(order);
+    }
+
+    private void requireAccess(Order order, UUID userId, String email) {
+        if (userId != null) {
+            Actor actor = currentUser.requireUser(userId);
+            if (actor.isStaff() || actor.userId().equals(order.customerId())) {
+                return;
+            }
+            throw new ForbiddenException("You can view only your own orders");
+        }
+        boolean guestKnowsEmail = order.customerId() == null && email != null
+                && email.trim().equalsIgnoreCase(order.contact().email());
+        if (!guestKnowsEmail) {
+            throw new UnauthorizedException("Sign in or provide the email used for the order");
+        }
     }
 
     /** Order history of the signed-in customer. */
