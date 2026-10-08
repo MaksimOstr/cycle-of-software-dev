@@ -8,8 +8,11 @@ import com.cycleofsoftwaredev.inventory.domain.ReservationStatus;
 import com.cycleofsoftwaredev.inventory.domain.StockItem;
 import com.cycleofsoftwaredev.inventory.domain.StockRepository;
 import com.cycleofsoftwaredev.inventory.domain.StockReservation;
+import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -45,19 +48,26 @@ public class InventoryService implements InventoryApi {
 
     @Override
     public synchronized void reserve(UUID orderId, List<StockLine> lines, Instant expiresAt) {
-        // check every line first, so that either all lines are reserved or none of them
-        for (StockLine line : lines) {
-            int available = availableQuantity(line.variantId());
-            if (available < line.quantity()) {
-                throw new OutOfStockException(line.variantId(), available);
+        if (!reservations.findByOrderId(orderId).isEmpty()) {
+            throw new BusinessRuleException("Stock for order " + orderId + " is already reserved");
+        }
+        // several lines of one variant are reserved as one quantity
+        Map<UUID, Integer> quantities = new LinkedHashMap<>();
+        lines.forEach(line -> quantities.merge(line.variantId(), line.quantity(), Integer::sum));
+
+        // check every variant first, so that either all lines are reserved or none of them
+        quantities.forEach((variantId, quantity) -> {
+            int available = availableQuantity(variantId);
+            if (available < quantity) {
+                throw new OutOfStockException(variantId, available);
             }
-        }
-        for (StockLine line : lines) {
-            StockItem item = stock.findByVariantId(line.variantId()).orElseThrow();
-            item.reserve(line.quantity());
+        });
+        quantities.forEach((variantId, quantity) -> {
+            StockItem item = stock.findByVariantId(variantId).orElseThrow();
+            item.reserve(quantity);
             stock.save(item);
-            reservations.save(new StockReservation(UUID.randomUUID(), orderId, line.variantId(), line.quantity(), expiresAt));
-        }
+            reservations.save(new StockReservation(UUID.randomUUID(), orderId, variantId, quantity, expiresAt));
+        });
     }
 
     @Override

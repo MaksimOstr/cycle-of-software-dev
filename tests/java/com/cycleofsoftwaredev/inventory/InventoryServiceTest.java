@@ -8,6 +8,7 @@ import com.cycleofsoftwaredev.inventory.api.StockLine;
 import com.cycleofsoftwaredev.inventory.application.InventoryService;
 import com.cycleofsoftwaredev.inventory.infrastructure.InMemoryReservationRepository;
 import com.cycleofsoftwaredev.inventory.infrastructure.InMemoryStockRepository;
+import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +44,26 @@ class InventoryServiceTest {
 
         assertThat(inventory.availableQuantity(phone)).isEqualTo(5);
         assertThat(inventory.availableQuantity(hoodie)).isEqualTo(1);
+    }
+
+    @Test
+    void linesOfTheSameVariantAreCheckedTogether() {
+        // 3 + 3 of the same variant with only 5 available: nothing may be reserved
+        assertThatThrownBy(() -> inventory.reserve(order, List.of(new StockLine(phone, 3), new StockLine(phone, 3)), null))
+                .isInstanceOf(OutOfStockException.class);
+        assertThat(inventory.availableQuantity(phone)).isEqualTo(5);
+
+        inventory.reserve(order, List.of(new StockLine(phone, 2), new StockLine(phone, 3)), null);
+        assertThat(inventory.availableQuantity(phone)).isZero();
+    }
+
+    @Test
+    void orderCannotReserveTwice() {
+        inventory.reserve(order, List.of(new StockLine(phone, 1)), null);
+
+        assertThatThrownBy(() -> inventory.reserve(order, List.of(new StockLine(phone, 1)), null))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThat(inventory.availableQuantity(phone)).isEqualTo(4);
     }
 
     @Test
