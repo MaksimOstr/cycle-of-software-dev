@@ -86,7 +86,7 @@ class ShopApiIntegrationTest {
         mvc.perform(json(post("/api/v1/payments/webhook"),
                         "{\"id\":\"evt_1\",\"type\":\"checkout.session.completed\",\"sessionId\":\"" + sessionId + "\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/v1/orders/" + orderNumber))
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, customer.id()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PAID"));
 
@@ -131,6 +131,78 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
         mvc.perform(json(post("/api/v1/management/categories"), "{\"name\":\"Hidden\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void invalidRequestsGetUniformErrors() throws Exception {
+        mvc.perform(json(post("/api/v1/auth/login"), "{not json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+        mvc.perform(json(post("/api/v1/orders"), """
+                        {"cartId":"%s","fullName":"Petro","email":"petro@example.com","phone":"+380501234567",
+                         "deliveryMethod":"TELEPORT","paymentMethod":"CARD_ONLINE"}""".formatted(UUID.randomUUID()))
+                        .header("Idempotency-Key", "bad-enum"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+        mvc.perform(json(post("/api/v1/orders"), "{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Required header 'Idempotency-Key' is missing"));
+        mvc.perform(get("/api/v1/products/not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid value of parameter 'productId'"));
+        mvc.perform(get("/api/v1/admin/sales").header(USER, manager.id()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+        mvc.perform(get("/api/v1/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        mvc.perform(post("/api/v1/categories"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    void customerOrderIsVisibleOnlyToItsOwnerAndStaff() throws Exception {
+        String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
+        String orderNumber = placeOrder(variantId, customer.id().toString());
+        UserView otherCustomer = registration.register(
+                new RegisterUserCommand("other" + System.nanoTime() + "@example.com", "Other", "Other12345"));
+
+        mvc.perform(get("/api/v1/orders/" + orderNumber)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, otherCustomer.id())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, customer.id())).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, manager.id())).andExpect(status().isOk());
+    }
+
+    @Test
+    void guestTracksOrderWithTheEmailUsedAtCheckout() throws Exception {
+        String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
+        String orderNumber = placeOrder(variantId, null);
+
+        mvc.perform(get("/api/v1/orders/" + orderNumber)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).param("email", "someone@example.com"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).param("email", "PETRO@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.number").value(orderNumber));
+    }
+
+    private String placeOrder(String variantId, String userId) throws Exception {
+        MockHttpServletRequestBuilder createCart = post("/api/v1/carts");
+        if (userId != null) {
+            createCart.header(USER, userId);
+        }
+        String cartId = read(mvc.perform(createCart).andExpect(status().isCreated()), "$.cartId");
+        mvc.perform(json(post("/api/v1/carts/" + cartId + "/items"), "{\"variantId\":\"" + variantId + "\",\"quantity\":1}"))
+                .andExpect(status().isOk());
+        MockHttpServletRequestBuilder order = json(post("/api/v1/orders"), """
+                {"cartId":"%s","fullName":"Petro","email":"petro@example.com","phone":"+380501234567",
+                 "deliveryMethod":"STORE_PICKUP","paymentMethod":"CASH_ON_DELIVERY"}""".formatted(cartId))
+                .header("Idempotency-Key", UUID.randomUUID().toString());
+        if (userId != null) {
+            order.header(USER, userId);
+        }
+        return read(mvc.perform(order).andExpect(status().isCreated()), "$.orderNumber");
     }
 
     @Test

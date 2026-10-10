@@ -3,6 +3,7 @@ package com.cycleofsoftwaredev.notification.application;
 import com.cycleofsoftwaredev.notification.domain.EmailComposer;
 import com.cycleofsoftwaredev.notification.domain.EmailMessage;
 import com.cycleofsoftwaredev.ordering.api.OrderStatusChanged;
+import java.util.Locale;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +28,7 @@ public class OrderStatusEmailComposer implements EmailComposer<OrderStatusChange
         if (body == null) {
             return Optional.empty();
         }
-        String subject = "Order " + event.orderNumber() + ": " + event.to().name().toLowerCase();
+        String subject = "Order " + event.orderNumber() + ": " + event.to().name().toLowerCase(Locale.ROOT);
         return Optional.of(new EmailMessage(event.customerEmail(), subject, body));
     }
 }
