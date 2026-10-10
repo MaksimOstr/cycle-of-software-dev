@@ -213,11 +213,12 @@ Module ownership follows the work distribution of Laboratory Work 3 (Jira projec
 
 - `master` contains only reviewed code and always builds.
 - Every task is done in its own branch named `feature/<module-or-task>`, by the owner of the module.
-- When the work is ready, the other team member reviews the changes (code review checklist: module boundaries,
-  SOLID, tests for new logic, all tests pass) and merges the branch with `git merge --no-ff`, so the history keeps
-  the branch and the reviewer as the author of the merge commit.
+- When the work is ready, a pull request to `master` is opened on GitHub. The other team member reviews it
+  (code review checklist: module boundaries, SOLID, tests for new logic, all tests pass) and merges it with a
+  merge commit, so the history keeps the branch.
+- Every branch builds on the previous ones, so the pull requests are merged in the order of the tables below.
 
-Branches of Lab 4:
+Branches of Lab 4 (one pull request per branch, in merge order):
 
 | Branch | Author | Reviewer |
 |--------|--------|----------|
