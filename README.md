@@ -104,8 +104,8 @@ build.gradle        build configuration
 
 ### Requirements
 
-- JDK 25 (Gradle downloads nothing else except dependencies)
-- Port 8080 free
+- JDK 25 (Gradle itself and all libraries are downloaded by the Gradle wrapper)
+- Free port 8080
 
 ### Build and test
 
@@ -156,8 +156,8 @@ curl -X POST http://localhost:8080/api/v1/orders -H "Content-Type: application/j
 curl -X POST http://localhost:8080/api/v1/payments/webhook -H "Content-Type: application/json" \
      -d '{"id":"evt_1","type":"checkout.session.completed","sessionId":"{sessionId}"}'
 
-# 5. the order is now PAID
-curl http://localhost:8080/api/v1/orders/{orderNumber}
+# 5. the order is now PAID (a guest tracks the order with the email used at checkout)
+curl "http://localhost:8080/api/v1/orders/{orderNumber}?email=petro@example.com"
 ```
 
 Emails are written to the application log (`EMAIL to=...`).
@@ -169,15 +169,25 @@ Emails are written to the application log (`EMAIL to=...`).
 | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Registration and login | everyone |
 | `GET /api/v1/categories`, `GET /api/v1/products?query=&categoryId=`, `GET /api/v1/products/{id}` | Catalog | everyone |
 | `POST /api/v1/carts`, `GET /api/v1/carts/{id}`, `POST/PUT/DELETE /api/v1/carts/{id}/items[/{variantId}]`, `POST /api/v1/carts/{id}/promo-code` | Cart | everyone |
-| `POST /api/v1/orders` (header `Idempotency-Key`), `GET /api/v1/orders/{number}` | Checkout and tracking | everyone |
+| `POST /api/v1/orders` (header `Idempotency-Key`) | Checkout | everyone |
+| `GET /api/v1/orders/{number}` | Order tracking | owner of the order and staff; for a guest order — `?email=` used at checkout |
 | `GET /api/v1/me/orders`, `POST /api/v1/orders/{number}/cancel` | Order history and cancellation | customer |
 | `GET/POST /api/v1/products/{id}/reviews` | Reviews | everyone / customer who received the product |
 | `POST /api/v1/payments/webhook` | Payment provider notifications | payment provider |
 | `/api/v1/management/**` (categories, products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
 | `/api/v1/admin/**` (delivery settings, audit log, sales report) | Administration | administrator |
 
-Errors are returned in one format: `{"code": "...", "message": "...", "fieldErrors": [...], "timestamp": "..."}`
-with status 400 (validation), 401, 403, 404 or 409 (business rule violated, for example "Only 1 item(s) left").
+Every error, including malformed JSON and unknown paths, is returned in one format:
+`{"code": "...", "message": "...", "fieldErrors": [...], "timestamp": "..."}`.
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `VALIDATION_FAILED`, `MALFORMED_REQUEST`, `BAD_REQUEST` | invalid fields (listed in `fieldErrors`), unreadable JSON or unknown enum value, missing or invalid parameter or header |
+| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN` | unknown user or wrong password / the role or owner does not match |
+| 404 | `NOT_FOUND` | entity or path does not exist |
+| 405 / 415 | `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | wrong HTTP method / body is not JSON |
+| 409 | `BUSINESS_RULE_VIOLATED` | a business rule is violated, for example "Only 1 item(s) left" |
+| 500 | `INTERNAL_ERROR` | unexpected error; details are written only to the log |
 
 ### Tests
 
@@ -203,11 +213,12 @@ Module ownership follows the work distribution of Laboratory Work 3 (Jira projec
 
 - `master` contains only reviewed code and always builds.
 - Every task is done in its own branch named `feature/<module-or-task>`, by the owner of the module.
-- When the work is ready, the other team member reviews the changes (code review checklist: module boundaries,
-  SOLID, tests for new logic, all tests pass) and merges the branch with `git merge --no-ff`, so the history keeps
-  the branch and the reviewer as the author of the merge commit.
+- When the work is ready, a pull request to `master` is opened on GitHub. The other team member reviews it
+  (code review checklist: module boundaries, SOLID, tests for new logic, all tests pass) and merges it with a
+  merge commit, so the history keeps the branch.
+- Every branch builds on the previous ones, so the pull requests are merged in the order of the tables below.
 
-Branches of Lab 4:
+Branches of Lab 4 (one pull request per branch, in merge order):
 
 | Branch | Author | Reviewer |
 |--------|--------|----------|
@@ -226,6 +237,14 @@ Branches of Lab 4:
 | `feature/sales-dashboard` | Ivan | Maksym |
 | `feature/rest-api` | Ivan | Maksym |
 | `feature/demo-data-and-docs` | Maksym | Ivan |
+
+Fixes after the code review of the whole Lab 4 code base (also made in separate branches):
+
+| Branch | Author | Reviewer | Fix |
+|--------|--------|----------|-----|
+| `fix/inventory-reservation` | Maksym | Ivan | Several lines of one variant are reserved together; an order cannot reserve twice |
+| `fix/api-review-findings` | Ivan | Maksym | Uniform errors for all invalid requests; order details only for the owner and staff; locale-independent email subjects |
+| `docs/readme-review-fixes` | Maksym | Ivan | README updated for the fixes |
 
 ## Roadmap
 
