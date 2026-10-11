@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'jacoco'
     id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -7,6 +8,14 @@ plugins {
 group = 'com'
 version = '0.0.1-SNAPSHOT'
 description = 'ShopSphere - online store (modular monolith)'
+
+// Versions of the libraries that are not managed by the Spring Boot BOM are kept in one place.
+// All Spring, Jackson, validation and test libraries get their versions from the BOM of Spring Boot 4.1.1,
+// so they are always compatible with each other.
+ext {
+    springdocVersion = '3.1.1'
+    jacocoVersion = '0.8.15'
+}
 
 java {
     toolchain {
@@ -34,11 +43,52 @@ sourceSets {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // health check and metrics endpoints (NFR "Logging and monitoring")
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // OpenAPI 3 description of the REST API and Swagger UI (NFR "API documentation")
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// Fail the build if two libraries ask for different versions of the same dependency and Gradle
+// would have to pick one silently.
+configurations.configureEach {
+    if (name in ['compileClasspath', 'runtimeClasspath']) {
+        resolutionStrategy.failOnVersionConflict()
+    }
+}
+
+jacoco {
+    toolVersion = jacocoVersion
+}
+
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+// Coverage report: build/reports/jacoco/test/html/index.html (NFR "Test coverage 70%")
+tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
+    reports {
+        html.required = true
+        xml.required = true
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.70
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestCoverageVerification')
 }
