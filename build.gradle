@@ -53,9 +53,14 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-liquibase'
     runtimeOnly 'org.postgresql:postgresql'
+    // Spring Security with JWT (signing and validation of tokens comes from the resource server starter)
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+    // Redis: refresh tokens and the limit of login attempts, both with an expiry time
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-    // integration tests start a real PostgreSQL in Docker
+    // integration tests start a real PostgreSQL and Redis in Docker
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'

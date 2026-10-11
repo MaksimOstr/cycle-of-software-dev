@@ -121,6 +121,11 @@ public class ApiExceptionHandler {
         return error(HttpStatus.FORBIDDEN, "ACCOUNT_BLOCKED", e.getMessage());
     }
 
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<ErrorResponse> tooManyRequests(TooManyRequestsException e) {
+        return error(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS", e.getMessage());
+    }
+
     @ExceptionHandler(ForbiddenException.class)
     ResponseEntity<ErrorResponse> forbidden(ForbiddenException e) {
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", e.getMessage());

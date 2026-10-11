@@ -34,6 +34,7 @@ class PlatformEndpointsTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").exists())
                 .andExpect(jsonPath("$.info.title").value("ShopSphere API"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/api/v1/products']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/orders']").exists());
     }

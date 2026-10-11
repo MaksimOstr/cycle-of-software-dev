@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,38 +34,33 @@ public class UserManagementController {
     }
 
     @GetMapping
-    public List<UserView> search(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                 @RequestParam(required = false) String query) {
-        currentUser.requireAdministrator(userId);
+    public List<UserView> search(@RequestParam(required = false) String query) {
+        currentUser.requireAdministrator();
         return users.search(query);
     }
 
     @GetMapping("/{id}")
-    public UserView details(@PathVariable UUID id,
-                            @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        currentUser.requireAdministrator(userId);
+    public UserView details(@PathVariable UUID id) {
+        currentUser.requireAdministrator();
         return users.getUser(id);
     }
 
     @PostMapping("/{id}/block")
-    public UserView block(@PathVariable UUID id,
-                          @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        Actor administrator = currentUser.requireAdministrator(userId);
+    public UserView block(@PathVariable UUID id) {
+        Actor administrator = currentUser.requireAdministrator();
         return users.block(id, administrator.userId());
     }
 
     @PostMapping("/{id}/unblock")
-    public UserView unblock(@PathVariable UUID id,
-                            @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        Actor administrator = currentUser.requireAdministrator(userId);
+    public UserView unblock(@PathVariable UUID id) {
+        Actor administrator = currentUser.requireAdministrator();
         return users.unblock(id, administrator.userId());
     }
 
     @PutMapping("/{id}/role")
     public UserView changeRole(@PathVariable UUID id,
-                               @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                @Valid @RequestBody RoleRequest request) {
-        Actor administrator = currentUser.requireAdministrator(userId);
+        Actor administrator = currentUser.requireAdministrator();
         return users.changeRole(id, request.role(), administrator.userId());
     }
 }

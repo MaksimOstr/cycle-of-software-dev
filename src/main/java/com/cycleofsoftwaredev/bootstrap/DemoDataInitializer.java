@@ -61,8 +61,8 @@ public class DemoDataInitializer implements ApplicationRunner {
             loadCatalog();
         }
 
-        log.info("Demo data loaded. Use the X-User-Id header: administrator={}, manager={}, customer={}",
-                admin.id(), manager.id(), customer.id());
+        log.info("Demo accounts are ready: {}, {}, {}. Sign in with POST /api/v1/auth/login",
+                admin.email(), manager.email(), customer.email());
     }
 
     /** Users are kept in PostgreSQL: a demo account is created only if it does not exist yet. */

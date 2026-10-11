@@ -1,6 +1,7 @@
 package com.cycleofsoftwaredev.web;
 
 import com.cycleofsoftwaredev.support.TestInfrastructure;
+import com.cycleofsoftwaredev.web.security.TokenService;
 import org.springframework.context.annotation.Import;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -38,7 +39,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @RecordApplicationEvents
 class ShopApiIntegrationTest {
 
-    private static final String USER = CurrentUserResolver.HEADER;
+    private static final String AUTH = "Authorization";
 
     @Autowired
     private MockMvc mvc;
@@ -48,6 +49,9 @@ class ShopApiIntegrationTest {
 
     @Autowired
     private RegistrationService registration;
+
+    @Autowired
+    private TokenService tokens;
 
     private final Map<String, String> productIds = new HashMap<>();
     private UserView manager;
@@ -66,7 +70,7 @@ class ShopApiIntegrationTest {
     void customerBuysProductWithCardAndManagerShipsIt() throws Exception {
         String variantId = createProductInStock("SKU-" + System.nanoTime(), "1500.00", 10);
 
-        String cartId = read(mvc.perform(post("/api/v1/carts").header(USER, customer.id()))
+        String cartId = read(mvc.perform(post("/api/v1/carts").header(AUTH, bearer(customer)))
                 .andExpect(status().isCreated()), "$.cartId");
         mvc.perform(json(post("/api/v1/carts/" + cartId + "/items"), "{\"variantId\":\"" + variantId + "\",\"quantity\":2}"))
                 .andExpect(status().isOk())
@@ -78,7 +82,7 @@ class ShopApiIntegrationTest {
                 """.formatted(cartId);
         String idempotencyKey = UUID.randomUUID().toString();
         String response = mvc.perform(json(post("/api/v1/orders"), order)
-                        .header("Idempotency-Key", idempotencyKey).header(USER, customer.id()))
+                        .header("Idempotency-Key", idempotencyKey).header(AUTH, bearer(customer)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("NEW"))
                 .andExpect(jsonPath("$.total.amount").value(3000.0)) // 2 x 1500, delivery is free above 2000
@@ -97,24 +101,24 @@ class ShopApiIntegrationTest {
         mvc.perform(json(post("/api/v1/payments/webhook"),
                         "{\"id\":\"evt_1\",\"type\":\"checkout.session.completed\",\"sessionId\":\"" + sessionId + "\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, customer.id()))
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(AUTH, bearer(customer)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PAID"));
 
         // a customer may not manage orders, a manager may
         mvc.perform(json(patch("/api/v1/management/orders/" + orderNumber + "/status"), "{\"status\":\"PROCESSING\"}")
-                        .header(USER, customer.id()))
+                        .header(AUTH, bearer(customer)))
                 .andExpect(status().isForbidden());
         mvc.perform(json(patch("/api/v1/management/orders/" + orderNumber + "/status"), "{\"status\":\"PROCESSING\"}")
-                        .header(USER, manager.id()))
+                        .header(AUTH, bearer(manager)))
                 .andExpect(status().isOk());
         mvc.perform(json(patch("/api/v1/management/orders/" + orderNumber + "/status"),
-                        "{\"status\":\"SHIPPED\",\"trackingNumber\":\"20450000000001\"}").header(USER, manager.id()))
+                        "{\"status\":\"SHIPPED\",\"trackingNumber\":\"20450000000001\"}").header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SHIPPED"))
                 .andExpect(jsonPath("$.trackingNumber").value("20450000000001"));
 
-        mvc.perform(get("/api/v1/me/orders").header(USER, customer.id()))
+        mvc.perform(get("/api/v1/me/orders").header(AUTH, bearer(customer)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].number").value(orderNumber));
         mvc.perform(get("/api/v1/products/" + productOf(variantId)))
@@ -161,7 +165,8 @@ class ShopApiIntegrationTest {
         mvc.perform(get("/api/v1/products/not-a-uuid"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid value of parameter 'productId'"));
-        mvc.perform(get("/api/v1/admin/sales").header(USER, manager.id()))
+        mvc.perform(get("/api/v1/admin/sales").header(AUTH, bearer(manager))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/sales").header(AUTH, bearer(newAdministrator())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("BAD_REQUEST"));
         mvc.perform(get("/api/v1/unknown"))
@@ -175,14 +180,14 @@ class ShopApiIntegrationTest {
     @Test
     void customerOrderIsVisibleOnlyToItsOwnerAndStaff() throws Exception {
         String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
-        String orderNumber = placeOrder(variantId, customer.id().toString());
+        String orderNumber = placeOrder(variantId, customer);
         UserView otherCustomer = registration.register(
                 new RegisterUserCommand("other" + System.nanoTime() + "@example.com", "Other", "Other12345"));
 
         mvc.perform(get("/api/v1/orders/" + orderNumber)).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, otherCustomer.id())).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, customer.id())).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/orders/" + orderNumber).header(USER, manager.id())).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(AUTH, bearer(otherCustomer))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(AUTH, bearer(customer))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/orders/" + orderNumber).header(AUTH, bearer(manager))).andExpect(status().isOk());
     }
 
     @Test
@@ -198,10 +203,10 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$.number").value(orderNumber));
     }
 
-    private String placeOrder(String variantId, String userId) throws Exception {
+    private String placeOrder(String variantId, UserView user) throws Exception {
         MockHttpServletRequestBuilder createCart = post("/api/v1/carts");
-        if (userId != null) {
-            createCart.header(USER, userId);
+        if (user != null) {
+            createCart.header(AUTH, bearer(user));
         }
         String cartId = read(mvc.perform(createCart).andExpect(status().isCreated()), "$.cartId");
         mvc.perform(json(post("/api/v1/carts/" + cartId + "/items"), "{\"variantId\":\"" + variantId + "\",\"quantity\":1}"))
@@ -210,8 +215,8 @@ class ShopApiIntegrationTest {
                 {"cartId":"%s","fullName":"Petro","email":"petro@example.com","phone":"+380501234567",
                  "deliveryMethod":"STORE_PICKUP","paymentMethod":"CASH_ON_DELIVERY"}""".formatted(cartId))
                 .header("Idempotency-Key", UUID.randomUUID().toString());
-        if (userId != null) {
-            order.header(USER, userId);
+        if (user != null) {
+            order.header(AUTH, bearer(user));
         }
         return read(mvc.perform(order).andExpect(status().isCreated()), "$.orderNumber");
     }
@@ -225,7 +230,10 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$.role").value("CUSTOMER"));
         mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + email + "\",\"password\":\"secret123\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(email));
+                .andExpect(jsonPath("$.user.email").value(email))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty());
         mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + email + "\",\"password\":\"wrong1234\"}"))
                 .andExpect(status().isUnauthorized());
     }
@@ -234,20 +242,20 @@ class ShopApiIntegrationTest {
     void managerEditsHidesAndDeletesProductsAndCategories() throws Exception {
         String name = "Lamp " + System.nanoTime();
         String categoryId = read(mvc.perform(json(post("/api/v1/management/categories"), "{\"name\":\"Lightning\"}")
-                .header(USER, manager.id())).andExpect(status().isCreated()), "$.id");
+                .header(AUTH, bearer(manager))).andExpect(status().isCreated()), "$.id");
         String productId = read(mvc.perform(json(post("/api/v1/management/products"),
                         "{\"name\":\"" + name + "\",\"description\":\"Desk lamp\",\"categoryId\":\"" + categoryId + "\"}")
-                .header(USER, manager.id())).andExpect(status().isCreated()), "$.id");
+                .header(AUTH, bearer(manager))).andExpect(status().isCreated()), "$.id");
         mvc.perform(json(post("/api/v1/management/products/" + productId + "/variants"),
-                        "{\"sku\":\"LAMP-" + System.nanoTime() + "\",\"name\":\"white\",\"price\":799.00}").header(USER, manager.id()))
+                        "{\"sku\":\"LAMP-" + System.nanoTime() + "\",\"name\":\"white\",\"price\":799.00}").header(AUTH, bearer(manager)))
                 .andExpect(status().isCreated());
 
-        mvc.perform(json(put("/api/v1/management/categories/" + categoryId), "{\"name\":\"Lighting\"}").header(USER, manager.id()))
+        mvc.perform(json(put("/api/v1/management/categories/" + categoryId), "{\"name\":\"Lighting\"}").header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Lighting"));
         mvc.perform(json(put("/api/v1/management/products/" + productId),
                         "{\"name\":\"" + name + " LED\",\"description\":\"LED desk lamp\",\"categoryId\":\"" + categoryId + "\"}")
-                        .header(USER, manager.id()))
+                        .header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value("LED desk lamp"));
         mvc.perform(get("/api/v1/products").param("query", name).param("categoryId", categoryId).param("sort", "PRICE_DESC"))
@@ -261,37 +269,37 @@ class ShopApiIntegrationTest {
 
         // a hidden product disappears from the storefront but stays in the management panel
         mvc.perform(json(patch("/api/v1/management/products/" + productId + "/visibility"), "{\"visible\":false}")
-                        .header(USER, customer.id()))
+                        .header(AUTH, bearer(customer)))
                 .andExpect(status().isForbidden());
         mvc.perform(json(patch("/api/v1/management/products/" + productId + "/visibility"), "{\"visible\":false}")
-                        .header(USER, manager.id()))
+                        .header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(false));
         mvc.perform(get("/api/v1/products/" + productId)).andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/products").param("query", name)).andExpect(jsonPath("$.totalItems").value(0));
-        mvc.perform(get("/api/v1/management/products").header(USER, manager.id()))
+        mvc.perform(get("/api/v1/management/products").header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == '" + productId + "')].active").value(false));
 
-        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(USER, manager.id()))
+        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(AUTH, bearer(manager)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("The category contains products and cannot be deleted"));
-        mvc.perform(delete("/api/v1/management/products/" + productId).header(USER, manager.id()))
+        mvc.perform(delete("/api/v1/management/products/" + productId).header(AUTH, bearer(manager)))
                 .andExpect(status().isNoContent());
-        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(USER, manager.id()))
+        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(AUTH, bearer(manager)))
                 .andExpect(status().isNoContent());
-        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(USER, manager.id()))
+        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(AUTH, bearer(manager)))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void managerFindsOrdersInTheOrderList() throws Exception {
         String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
-        String orderNumber = placeOrder(variantId, customer.id().toString());
+        String orderNumber = placeOrder(variantId, customer);
 
         mvc.perform(get("/api/v1/management/orders")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/management/orders").header(USER, customer.id())).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/management/orders").param("search", orderNumber).header(USER, manager.id()))
+        mvc.perform(get("/api/v1/management/orders").header(AUTH, bearer(customer))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/management/orders").param("search", orderNumber).header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].number").value(orderNumber))
@@ -299,53 +307,56 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$[0].email").value("petro@example.com"))
                 .andExpect(jsonPath("$[0].total.amount").value(500.0));
         mvc.perform(get("/api/v1/management/orders").param("status", "NEW").param("paymentMethod", "CASH_ON_DELIVERY")
-                        .param("deliveryMethod", "STORE_PICKUP").param("from", "2020-01-01T00:00:00Z").header(USER, manager.id()))
+                        .param("deliveryMethod", "STORE_PICKUP").param("from", "2020-01-01T00:00:00Z").header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.number == '" + orderNumber + "')]").isNotEmpty());
         mvc.perform(get("/api/v1/management/orders").param("search", orderNumber).param("status", "SHIPPED")
-                        .header(USER, manager.id()))
+                        .header(AUTH, bearer(manager)))
                 .andExpect(jsonPath("$.length()").value(0));
-        mvc.perform(get("/api/v1/management/orders").param("status", "LOST").header(USER, manager.id()))
+        mvc.perform(get("/api/v1/management/orders").param("status", "LOST").header(AUTH, bearer(manager)))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void administratorManagesUsers() throws Exception {
-        UserView admin = registration.createUser(
-                new RegisterUserCommand("admin" + System.nanoTime() + "@example.com", "Admin", "Admin12345"), Role.ADMINISTRATOR);
+        UserView admin = newAdministrator();
         String login = "{\"email\":\"" + customer.email() + "\",\"password\":\"Customer123\"}";
 
-        mvc.perform(get("/api/v1/admin/users").header(USER, manager.id())).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/admin/users").param("query", customer.email()).header(USER, admin.id()))
+        mvc.perform(get("/api/v1/admin/users").header(AUTH, bearer(manager))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/users").param("query", customer.email()).header(AUTH, bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(customer.id().toString()))
                 .andExpect(jsonPath("$[0].blocked").value(false));
 
         // a blocked user can neither log in nor use the API
-        mvc.perform(post("/api/v1/admin/users/" + customer.id() + "/block").header(USER, admin.id()))
+        mvc.perform(post("/api/v1/admin/users/" + customer.id() + "/block").header(AUTH, bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.blocked").value(true));
         mvc.perform(json(post("/api/v1/auth/login"), login))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_BLOCKED"));
-        mvc.perform(get("/api/v1/me/orders").header(USER, customer.id())).andExpect(status().isForbidden());
-        mvc.perform(post("/api/v1/admin/users/" + customer.id() + "/unblock").header(USER, admin.id()))
+        mvc.perform(get("/api/v1/me/orders").header(AUTH, bearer(customer))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/admin/users/" + customer.id() + "/unblock").header(AUTH, bearer(admin)))
                 .andExpect(status().isOk());
         mvc.perform(json(post("/api/v1/auth/login"), login)).andExpect(status().isOk());
 
         // the customer becomes a manager and gets access to the management panel
-        mvc.perform(get("/api/v1/management/products").header(USER, customer.id())).andExpect(status().isForbidden());
-        mvc.perform(json(put("/api/v1/admin/users/" + customer.id() + "/role"), "{\"role\":\"MANAGER\"}").header(USER, admin.id()))
+        mvc.perform(get("/api/v1/management/products").header(AUTH, bearer(customer))).andExpect(status().isForbidden());
+        mvc.perform(json(put("/api/v1/admin/users/" + customer.id() + "/role"), "{\"role\":\"MANAGER\"}").header(AUTH, bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("MANAGER"));
-        mvc.perform(get("/api/v1/management/products").header(USER, customer.id())).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/admin/users/" + customer.id()).header(USER, admin.id()))
+        mvc.perform(get("/api/v1/management/products").header(AUTH, bearer(customer))).andExpect(status().isForbidden());
+        String managerToken = "Bearer " + read(mvc.perform(json(post("/api/v1/auth/login"), login))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.role").value("MANAGER")), "$.accessToken");
+        mvc.perform(get("/api/v1/management/products").header(AUTH, managerToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/users/" + customer.id()).header(AUTH, bearer(admin)))
                 .andExpect(jsonPath("$.role").value("MANAGER"));
 
-        mvc.perform(post("/api/v1/admin/users/" + admin.id() + "/block").header(USER, admin.id()))
+        mvc.perform(post("/api/v1/admin/users/" + admin.id() + "/block").header(AUTH, bearer(admin)))
                 .andExpect(status().isConflict());
-        mvc.perform(get("/api/v1/admin/audit-log").header(USER, admin.id()))
+        mvc.perform(get("/api/v1/admin/audit-log").header(AUTH, bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.eventType == 'UserAccountChanged')]").isNotEmpty());
     }
@@ -390,19 +401,29 @@ class ShopApiIntegrationTest {
 
     private String createProductInStock(String sku, String price, int quantity) throws Exception {
         String categoryId = read(mvc.perform(json(post("/api/v1/management/categories"), "{\"name\":\"Hoodies\"}")
-                .header(USER, manager.id())).andExpect(status().isCreated()), "$.id");
+                .header(AUTH, bearer(manager))).andExpect(status().isCreated()), "$.id");
         String productId = read(mvc.perform(json(post("/api/v1/management/products"),
                         "{\"name\":\"Hoodie\",\"description\":\"Cotton\",\"categoryId\":\"" + categoryId + "\"}")
-                .header(USER, manager.id())).andExpect(status().isCreated()), "$.id");
+                .header(AUTH, bearer(manager))).andExpect(status().isCreated()), "$.id");
         String variantId = read(mvc.perform(json(post("/api/v1/management/products/" + productId + "/variants"),
                         "{\"sku\":\"" + sku + "\",\"name\":\"M\",\"price\":" + price + "}")
-                .header(USER, manager.id())).andExpect(status().isCreated()), "$.variants[0].id");
+                .header(AUTH, bearer(manager))).andExpect(status().isCreated()), "$.variants[0].id");
         mvc.perform(json(put("/api/v1/management/stock/" + variantId), "{\"onHand\":" + quantity + "}")
-                        .header(USER, manager.id()))
+                        .header(AUTH, bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.available").value(quantity));
         productIds.put(variantId, productId);
         return variantId;
+    }
+
+    /** Value of the Authorization header with a fresh access token of the user. */
+    private String bearer(UserView user) {
+        return "Bearer " + tokens.issue(user).accessToken();
+    }
+
+    private UserView newAdministrator() {
+        return registration.createUser(
+                new RegisterUserCommand("admin" + System.nanoTime() + "@example.com", "Admin", "Admin12345"), Role.ADMINISTRATOR);
     }
 
     private String productOf(String variantId) {
