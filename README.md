@@ -15,9 +15,10 @@ The project is developed during the "Software Development Life Cycle" laboratory
 
 ## Technology stack
 
-- Java 25, Spring Boot 4.1 (Spring Web MVC, Bean Validation)
+- Java 25, Spring Boot 4.1 (Spring Web MVC, Bean Validation, Actuator)
+- springdoc-openapi 3.1 (OpenAPI 3 description of the REST API and Swagger UI)
 - Gradle 9 (wrapper included)
-- JUnit 5, AssertJ, Spring MockMvc for tests
+- JUnit 5, AssertJ, Spring MockMvc for tests, JaCoCo for test coverage
 - Storage: in-memory repositories in this stage. PostgreSQL 17 with Flyway, JWT security, Stripe, Nova Poshta
   and SMTP adapters are the next backlog items (see [Roadmap](#roadmap)).
 
@@ -110,9 +111,32 @@ build.gradle        build configuration
 ### Build and test
 
 ```bash
-./gradlew build        # compile and run all tests (Windows: gradlew.bat build)
+./gradlew build        # compile, run all tests and check the test coverage (Windows: gradlew.bat build)
 ./gradlew test         # run tests only; report: build/reports/tests/test/index.html
+                       # coverage report: build/reports/jacoco/test/html/index.html
 ```
+
+### Dependency management
+
+All dependencies are declared in one file, [`build.gradle`](build.gradle); the Gradle wrapper downloads them, so
+nothing has to be installed manually.
+
+| Dependency | Version | Used for |
+|------------|---------|----------|
+| `spring-boot-starter-webmvc` | 4.1.1 (Spring Boot BOM) | REST API |
+| `spring-boot-starter-validation` | 4.1.1 (Spring Boot BOM) | validation of requests |
+| `spring-boot-starter-actuator` | 4.1.1 (Spring Boot BOM) | health check `/actuator/health` |
+| `springdoc-openapi-starter-webmvc-ui` | 3.1.1 | OpenAPI 3 document and Swagger UI |
+| `spring-boot-starter-test`, `spring-boot-starter-webmvc-test` | 4.1.1 (Spring Boot BOM) | JUnit 5, AssertJ, MockMvc |
+| JaCoCo (Gradle plugin) | 0.8.15 | test coverage report and the 70% coverage check |
+
+How the versions are kept synchronized:
+
+- Spring, Jackson, Tomcat, validation and test libraries have no version in `build.gradle`: the version comes from
+  the BOM of Spring Boot 4.1.1 (`io.spring.dependency-management` plugin), so they always match each other.
+- Versions of the libraries outside the BOM (springdoc, JaCoCo) are declared once in the `ext` block.
+- `failOnVersionConflict()` stops the build if two libraries require different versions of one dependency.
+- `./gradlew dependencies --configuration runtimeClasspath` prints the resolved dependency tree.
 
 ### Run
 
@@ -161,6 +185,14 @@ curl "http://localhost:8080/api/v1/orders/{orderNumber}?email=petro@example.com"
 ```
 
 Emails are written to the application log (`EMAIL to=...`).
+
+### API documentation and health check
+
+| URL | What it is |
+|-----|------------|
+| `http://localhost:8080/swagger-ui.html` | Swagger UI: every endpoint can be called from the browser |
+| `http://localhost:8080/v3/api-docs` | OpenAPI 3 description of the REST API (JSON) |
+| `http://localhost:8080/actuator/health` | Health check: `{"status":"UP"}` while the application is running |
 
 ### REST API overview
 
