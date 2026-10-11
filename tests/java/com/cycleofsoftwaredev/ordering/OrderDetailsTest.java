@@ -29,7 +29,8 @@ class OrderDetailsTest {
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(strings = {"", "12345", "phone number", "+380501234567890123456", "+38050123456a"})
+    @ValueSource(strings = {"", "12345", "phone number", "+380501234567890123456", "+38050123456a", "----------",
+            "          ", "(() ) - - ()", "+38 (050) 12-34"})
     void rejectsWhatIsNotAPhoneNumber(String phone) {
         assertThatThrownBy(() -> new ContactInfo("Petro", "petro@example.com", phone))
                 .isInstanceOf(IllegalArgumentException.class);
