@@ -7,12 +7,15 @@ import com.cycleofsoftwaredev.identity.domain.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Use case "Login". Checks the credentials only; issuing a JWT is the job of the Web and Security layer
- * (work item SHOP-17), so this class does not depend on the token technology.
+ * (work item SHOP-17), so this class does not depend on the token technology. A rejected login does not
+ * roll the transaction back: the counter of failed attempts has to be saved.
  */
 @Service
+@Transactional(noRollbackFor = {AuthenticationException.class, AccountLockedException.class, AccountBlockedException.class})
 public class AuthenticationService {
 
     private final UserRepository users;

@@ -14,9 +14,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use case "User management": an administrator searches users, blocks and unblocks them and assigns roles. */
 @Service
+@Transactional
 public class UserManagementService {
 
     private final UserRepository users;

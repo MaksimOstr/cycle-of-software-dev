@@ -1,9 +1,11 @@
 package com.cycleofsoftwaredev.administration.api;
 
 import com.cycleofsoftwaredev.shared.domain.Money;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 
 /** Delivery prices configured by the administrator ("Store settings" requirement). */
+@Embeddable
 public record DeliverySettings(Money courierPrice, Money novaPoshtaPrice, Money freeShippingThreshold) {
 
     public DeliverySettings {

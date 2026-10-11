@@ -7,4 +7,6 @@ import java.util.UUID;
 public interface IdentityApi {
 
     Optional<UserView> findUser(UUID userId);
+
+    Optional<UserView> findUserByEmail(String email);
 }

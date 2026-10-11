@@ -2,10 +2,8 @@ package com.cycleofsoftwaredev.administration.infrastructure;
 
 import com.cycleofsoftwaredev.administration.domain.StoreSettings;
 import com.cycleofsoftwaredev.administration.domain.StoreSettingsRepository;
-import org.springframework.stereotype.Repository;
 
-/** In-memory storage used until the PostgreSQL schema of the module is created (work item SHOP-16). */
-@Repository
+/** In-memory test double: lets the unit tests of the services run without a database. */
 public class InMemoryStoreSettingsRepository implements StoreSettingsRepository {
 
     private volatile StoreSettings settings = StoreSettings.defaults();

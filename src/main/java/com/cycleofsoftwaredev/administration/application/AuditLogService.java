@@ -8,9 +8,11 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use case "Audit log": every domain event published by any module is recorded. */
 @Service
+@Transactional
 public class AuditLogService {
 
     private final AuditLogRepository auditLog;
@@ -21,7 +23,7 @@ public class AuditLogService {
 
     @EventListener
     public void record(DomainEvent event) {
-        auditLog.append(new AuditEntry(UUID.randomUUID(), event.getClass().getSimpleName(), event.toString(), event.occurredAt()));
+        auditLog.save(new AuditEntry(UUID.randomUUID(), event.getClass().getSimpleName(), event.toString(), event.occurredAt()));
     }
 
     public List<AuditEntry> latestEntries(int limit) {

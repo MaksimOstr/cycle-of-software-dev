@@ -5,7 +5,6 @@ import com.cycleofsoftwaredev.administration.application.AuditLogService;
 import com.cycleofsoftwaredev.administration.application.SalesReport;
 import com.cycleofsoftwaredev.administration.application.SalesReportService;
 import com.cycleofsoftwaredev.administration.application.SettingsService;
-import com.cycleofsoftwaredev.administration.domain.AuditEntry;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
@@ -61,10 +60,10 @@ public class AdministrationController {
     }
 
     @GetMapping("/audit-log")
-    public List<AuditEntry> auditLog(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
+    public List<AuditEntryResponse> auditLog(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                      @RequestParam(defaultValue = "50") int limit) {
         currentUser.requireAdministrator(userId);
-        return auditLog.latestEntries(limit);
+        return auditLog.latestEntries(limit).stream().map(AuditEntryResponse::of).toList();
     }
 
     @GetMapping("/sales")

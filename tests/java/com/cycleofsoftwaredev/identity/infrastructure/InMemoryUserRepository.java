@@ -7,10 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
 
-/** In-memory storage used until the PostgreSQL schema of the module is created (work item SHOP-16). */
-@Repository
+/** In-memory test double: lets the unit tests of the services run without a database. */
 public class InMemoryUserRepository implements UserRepository {
 
     private final Map<UUID, User> users = new ConcurrentHashMap<>();
