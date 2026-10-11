@@ -209,6 +209,7 @@ Emails are written to the application log (`EMAIL to=...`).
 | `POST /api/v1/payments/webhook` | Payment provider notifications | payment provider |
 | `/api/v1/management/**` (create, edit and delete categories and products, hide products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
 | `/api/v1/admin/**` (delivery settings, audit log, sales report) | Administration | administrator |
+| `GET /api/v1/admin/users?query=`, `GET /api/v1/admin/users/{id}`, `POST /api/v1/admin/users/{id}/block`, `POST .../unblock`, `PUT /api/v1/admin/users/{id}/role` | User management: search, block and unblock accounts, assign roles; every change is written to the audit log | administrator |
 
 Every error, including malformed JSON and unknown paths, is returned in one format:
 `{"code": "...", "message": "...", "fieldErrors": [...], "timestamp": "..."}`.
@@ -216,7 +217,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | Status | Code | When |
 |--------|------|------|
 | 400 | `VALIDATION_FAILED`, `MALFORMED_REQUEST`, `BAD_REQUEST` | invalid fields (listed in `fieldErrors`), unreadable JSON or unknown enum value, missing or invalid parameter or header |
-| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN` | unknown user or wrong password / the role or owner does not match |
+| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN`, `ACCOUNT_BLOCKED` | unknown user or wrong password / the role or owner does not match, the account is blocked by an administrator |
 | 404 | `NOT_FOUND` | entity or path does not exist |
 | 405 / 415 | `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | wrong HTTP method / body is not JSON |
 | 409 | `BUSINESS_RULE_VIOLATED` | a business rule is violated, for example "Only 1 item(s) left" |
@@ -228,7 +229,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | Test | What it checks |
 |------|----------------|
 | `MoneyTest`, `OrderTest` | Value object arithmetic; every transition of the order state machine (Lab 2, Figure 8) |
-| `RegistrationServiceTest`, `AccountSecurityTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
+| `RegistrationServiceTest`, `AccountSecurityTest`, `UserManagementServiceTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
 | `CheckoutServiceTest`, `OrderServiceTest` | Checkout and payment scenarios of Lab 2, Figures 6 and 7: idempotency, stock reservation, unpaid order expiry, late payment refund, cancellation, return |
 | `DeliveryCostPolicyContractTest` | Liskov substitution contract of all delivery cost policies |
 | `ModuleBoundariesTest` | Module boundaries and dependency rules of the architecture |
