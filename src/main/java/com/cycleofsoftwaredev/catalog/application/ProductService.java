@@ -12,9 +12,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use cases "Product management", "Product variants", "Product listing" and "Product search". */
 @Service
+@Transactional
 public class ProductService implements CatalogApi {
 
     private final ProductRepository products;
@@ -50,7 +52,7 @@ public class ProductService implements CatalogApi {
 
     /** Orders keep their own copy of the product name and price, so they are not affected. */
     public void deleteProduct(UUID productId) {
-        products.delete(getProduct(productId).id());
+        products.deleteById(getProduct(productId).id());
     }
 
     public ProductVariant addVariant(UUID productId, String sku, String variantName, Money price) {

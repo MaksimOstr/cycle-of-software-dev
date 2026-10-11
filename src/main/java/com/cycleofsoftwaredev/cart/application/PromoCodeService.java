@@ -5,9 +5,11 @@ import com.cycleofsoftwaredev.cart.domain.PromoCodeRepository;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use case "Promo code management" for managers. */
 @Service
+@Transactional
 public class PromoCodeService {
 
     private final PromoCodeRepository promoCodes;

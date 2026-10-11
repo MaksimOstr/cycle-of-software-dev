@@ -22,7 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Fills the in-memory storage with demo data so that the API can be tried right after start.
+ * Loads demo data so that the API can be tried right after start.
  * Disabled with {@code shopsphere.demo-data.enabled=false}.
  */
 @Component
@@ -57,6 +57,16 @@ public class DemoDataInitializer implements ApplicationRunner {
         UserView customer = registration.register(
                 new RegisterUserCommand("customer@shopsphere.local", "Petro Customer", "Customer12345"));
 
+        if (categories.listCategories().isEmpty()) {
+            loadCatalog();
+        }
+
+        log.info("Demo data loaded. Use the X-User-Id header: administrator={}, manager={}, customer={}",
+                admin.id(), manager.id(), customer.id());
+    }
+
+    /** The catalog is kept in PostgreSQL, so it is created only once, in an empty database. */
+    private void loadCatalog() {
         Category electronics = categories.createCategory("Electronics", null);
         Category smartphones = categories.createCategory("Smartphones", electronics.id());
         Category clothing = categories.createCategory("Clothing", null);
@@ -70,9 +80,6 @@ public class DemoDataInitializer implements ApplicationRunner {
         stock(products.addVariant(hoodie.id(), "HOOD-L-GRY", "L, grey", Money.of("1299.00")), 25);
 
         promoCodes.createPromoCode("WELCOME10", 10, clock.instant().plus(Duration.ofDays(365)), 1000);
-
-        log.info("Demo data loaded. Use the X-User-Id header: administrator={}, manager={}, customer={}",
-                admin.id(), manager.id(), customer.id());
     }
 
     private void stock(ProductVariant variant, int quantity) {

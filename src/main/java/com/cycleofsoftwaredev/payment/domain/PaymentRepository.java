@@ -9,5 +9,5 @@ public interface PaymentRepository {
 
     Optional<Payment> findByOrderId(UUID orderId);
 
-    Optional<Payment> findBySessionId(String providerSessionId);
+    Optional<Payment> findByProviderSessionId(String providerSessionId);
 }

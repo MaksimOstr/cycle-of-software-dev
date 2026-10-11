@@ -1,5 +1,7 @@
 package com.cycleofsoftwaredev.integration;
 
+import com.cycleofsoftwaredev.support.TestInfrastructure;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -39,6 +41,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Ordering -> Cart, Delivery, Inventory and Payment, Delivery -> Administration (settings),
  * Reviews -> Ordering, Notification and Audit log <- domain events of the other modules.
  */
+@Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc
 class SystemIntegrationTest {

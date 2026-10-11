@@ -1,18 +1,28 @@
 package com.cycleofsoftwaredev.inventory.domain;
 
 import com.cycleofsoftwaredev.inventory.api.OutOfStockException;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Stock of one product variant: goods on hand and the part of them reserved for unpaid orders. */
+@Entity
+@Table(name = "stock_items", schema = "inventory")
 public class StockItem {
 
     public static final int DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
-    private final UUID variantId;
+    @Id
+    private UUID variantId;
     private int onHand;
     private int reserved;
     private int lowStockThreshold = DEFAULT_LOW_STOCK_THRESHOLD;
+
+    protected StockItem() {
+        // for JPA
+    }
 
     public StockItem(UUID variantId, int onHand) {
         this.variantId = Objects.requireNonNull(variantId);

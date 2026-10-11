@@ -1,0 +1,6 @@
+# Liquibase changelog of ShopSphere. The changes are plain SQL files ("liquibase formatted sql"),
+# applied in the order listed here; a file that was applied is never edited, a new change is a new file.
+databaseChangeLog:
+  - include:
+      file: changes/001-catalog-inventory-cart-ordering-payment.sql
+      relativeToChangelogFile: true

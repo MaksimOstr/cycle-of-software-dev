@@ -5,9 +5,8 @@ import com.cycleofsoftwaredev.cart.domain.PromoCodeRepository;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
 
-@Repository
+/** In-memory test double: lets the unit tests of the services run without a database. */
 public class InMemoryPromoCodeRepository implements PromoCodeRepository {
 
     private final Map<String, PromoCode> promoCodes = new ConcurrentHashMap<>();

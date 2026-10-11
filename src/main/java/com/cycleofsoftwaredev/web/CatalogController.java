@@ -4,7 +4,6 @@ import com.cycleofsoftwaredev.catalog.application.CategoryService;
 import com.cycleofsoftwaredev.catalog.application.ProductPage;
 import com.cycleofsoftwaredev.catalog.application.ProductService;
 import com.cycleofsoftwaredev.catalog.application.ProductSort;
-import com.cycleofsoftwaredev.catalog.domain.Category;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,8 +31,8 @@ public class CatalogController {
     }
 
     @GetMapping("/categories")
-    public List<Category> categories() {
-        return categories.listCategories();
+    public List<CategoryResponse> categories() {
+        return categories.listCategories().stream().map(CategoryResponse::of).toList();
     }
 
     /** Product listing and search: one page of products, 24 per page by default. */

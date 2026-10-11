@@ -1,5 +1,7 @@
 package com.cycleofsoftwaredev.integration;
 
+import com.cycleofsoftwaredev.support.TestInfrastructure;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,19 +23,22 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
  * Checks of the non-functional requirements that can be measured automatically on the integrated system.
- * The test has its own application context (its own name), so the large catalog does not get into other tests.
+ * They run on the real PostgreSQL started by Testcontainers.
  */
-@SpringBootTest(properties = {"shopsphere.demo-data.enabled=false", "spring.application.name=shopsphere-nfr-test"})
+@Import(TestInfrastructure.class)
+@SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc
 class NonFunctionalRequirementsTest {
 
@@ -52,16 +57,45 @@ class NonFunctionalRequirementsTest {
     @Autowired
     private InventoryService inventory;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    private UUID performanceCategoryId;
+
+    /** The database is shared with the other test classes, so the large catalog is removed after the test. */
+    @AfterEach
+    void removeLargeCatalog() {
+        if (performanceCategoryId != null) {
+            jdbc.update("""
+                    DELETE FROM inventory.stock_items WHERE variant_id IN (
+                        SELECT v.id FROM catalog.product_variants v
+                        JOIN catalog.products p ON p.id = v.product_id WHERE p.category_id = ?)""", performanceCategoryId);
+            jdbc.update("DELETE FROM catalog.products WHERE category_id = ?", performanceCategoryId);
+        }
+    }
+
     /** NFR "Server response time": 95% of catalog, search and cart responses are returned within 500 ms. */
     @Test
     void catalogSearchAndCartRespondWithinHalfASecond() throws Exception {
         Category category = categories.createCategory("Performance " + System.nanoTime(), null);
+        performanceCategoryId = category.id();
         UUID variantId = null;
+        List<Object[]> productRows = new ArrayList<>();
+        List<Object[]> variantRows = new ArrayList<>();
+        List<Object[]> stockRows = new ArrayList<>();
         for (int i = 0; i < CATALOG_SIZE; i++) {
-            Product product = products.createProduct("Item " + i, "Description of item " + i, category.id());
-            variantId = products.addVariant(product.id(), "PERF-" + System.nanoTime() + "-" + i, "default", Money.of("100")).id();
-            inventory.setStock(variantId, 1_000);
+            UUID productId = UUID.randomUUID();
+            variantId = UUID.randomUUID();
+            productRows.add(new Object[] {productId, "Item " + i, "Description of item " + i, category.id()});
+            variantRows.add(new Object[] {productId, variantId, "PERF-" + variantId});
+            stockRows.add(new Object[] {variantId});
         }
+        jdbc.batchUpdate("INSERT INTO catalog.products (id, name, description, category_id, active) "
+                + "VALUES (?, ?, ?, ?, true)", productRows);
+        jdbc.batchUpdate("INSERT INTO catalog.product_variants (product_id, position, id, sku, name, price) "
+                + "VALUES (?, 0, ?, ?, 'default', 100.00)", variantRows);
+        jdbc.batchUpdate("INSERT INTO inventory.stock_items (variant_id, on_hand, reserved, low_stock_threshold) "
+                + "VALUES (?, 1000, 0, 5)", stockRows);
         String cartId = JsonPath.read(mvc.perform(post("/api/v1/carts")).andReturn().getResponse().getContentAsString(), "$.cartId");
         MockHttpServletRequestBuilder addToCart = post("/api/v1/carts/" + cartId + "/items")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"variantId\":\"" + variantId + "\",\"quantity\":1}");

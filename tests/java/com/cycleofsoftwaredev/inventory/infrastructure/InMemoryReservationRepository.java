@@ -6,16 +6,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
 
-@Repository
+/** In-memory test double: lets the unit tests of the services run without a database. */
 public class InMemoryReservationRepository implements ReservationRepository {
 
     private final Map<UUID, StockReservation> reservations = new ConcurrentHashMap<>();
 
     @Override
-    public void save(StockReservation reservation) {
+    public StockReservation save(StockReservation reservation) {
         reservations.put(reservation.id(), reservation);
+        return reservation;
     }
 
     @Override

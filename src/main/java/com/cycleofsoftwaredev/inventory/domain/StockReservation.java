@@ -1,19 +1,33 @@
 package com.cycleofsoftwaredev.inventory.domain;
 
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Goods of one variant held for one order. */
+@Entity
+@Table(name = "stock_reservations", schema = "inventory")
 public class StockReservation {
 
-    private final UUID id;
-    private final UUID orderId;
-    private final UUID variantId;
-    private final int quantity;
-    private final Instant expiresAt;
+    @Id
+    private UUID id;
+    private UUID orderId;
+    private UUID variantId;
+    private int quantity;
+    private Instant expiresAt;
+
+    @Enumerated(EnumType.STRING)
     private ReservationStatus status = ReservationStatus.ACTIVE;
+
+    protected StockReservation() {
+        // for JPA
+    }
 
     public StockReservation(UUID id, UUID orderId, UUID variantId, int quantity, Instant expiresAt) {
         this.id = Objects.requireNonNull(id);

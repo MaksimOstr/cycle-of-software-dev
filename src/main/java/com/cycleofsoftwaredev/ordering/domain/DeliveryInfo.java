@@ -1,10 +1,16 @@
 package com.cycleofsoftwaredev.ordering.domain;
 
 import com.cycleofsoftwaredev.delivery.api.DeliveryMethod;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import java.util.Objects;
 
 /** How and where the order is delivered. For Nova Poshta the address is the branch. */
-public record DeliveryInfo(DeliveryMethod method, String address, String trackingNumber) {
+@Embeddable
+public record DeliveryInfo(@Enumerated(EnumType.STRING) DeliveryMethod method, @Column(length = 500) String address,
+                           String trackingNumber) {
 
     public DeliveryInfo {
         Objects.requireNonNull(method, "Delivery method is required");

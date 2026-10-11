@@ -5,10 +5,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.atomic.AtomicLong;
-import org.springframework.stereotype.Component;
 
-/** Numbers like SS-261005-00001. Will be replaced by a database sequence together with PostgreSQL. */
-@Component
+/** Test double of the order number generator: numbers like SS-261005-00001 from a counter in memory. */
 public class SequentialOrderNumberGenerator implements OrderNumberGenerator {
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyMMdd");

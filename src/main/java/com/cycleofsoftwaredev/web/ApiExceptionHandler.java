@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -44,6 +46,19 @@ public class ApiExceptionHandler {
     @ExceptionHandler(BusinessRuleException.class)
     ResponseEntity<ErrorResponse> businessRule(BusinessRuleException e) {
         return error(HttpStatus.CONFLICT, "BUSINESS_RULE_VIOLATED", e.getMessage());
+    }
+
+    /** A unique constraint was violated, for example two simultaneous requests with one idempotency key. */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ErrorResponse> conflict(DataIntegrityViolationException e) {
+        log.warn("Data integrity violation: {}", e.getMostSpecificCause().getMessage());
+        return error(HttpStatus.CONFLICT, "CONFLICT", "The request conflicts with data that already exists");
+    }
+
+    /** The row is locked by another transaction for too long or a deadlock was resolved by the database. */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    ResponseEntity<ErrorResponse> busy(PessimisticLockingFailureException e) {
+        return error(HttpStatus.CONFLICT, "CONFLICT", "The data is being changed by another request, try again");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

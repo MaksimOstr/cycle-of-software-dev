@@ -2,20 +2,38 @@ package com.cycleofsoftwaredev.payment.domain;
 
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Online card payment of one order. Card data never reaches ShopSphere, only the provider session id. */
+@Entity
+@Table(name = "payments", schema = "payment")
 public class Payment {
 
-    private final UUID id;
-    private final UUID orderId;
-    private final String providerSessionId;
-    private final String paymentUrl;
-    private final Money amount;
-    private final Instant createdAt;
+    @Id
+    private UUID id;
+    private UUID orderId;
+    private String providerSessionId;
+
+    @Column(length = 500)
+    private String paymentUrl;
+
+    private Money amount;
+    private Instant createdAt;
+
+    @Enumerated(EnumType.STRING)
     private PaymentStatus status = PaymentStatus.PENDING;
+
+    protected Payment() {
+        // for JPA
+    }
 
     public Payment(UUID id, UUID orderId, String providerSessionId, String paymentUrl, Money amount, Instant createdAt) {
         this.id = Objects.requireNonNull(id);

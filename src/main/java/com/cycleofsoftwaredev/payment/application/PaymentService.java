@@ -16,9 +16,11 @@ import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use case "Payment methods" (online card payment) and processing of payment provider webhooks. */
 @Service
+@Transactional
 public class PaymentService implements PaymentApi {
 
     private final PaymentRepository payments;
@@ -80,7 +82,7 @@ public class PaymentService implements PaymentApi {
         if (!PaymentWebhookEvent.CHECKOUT_COMPLETED.equals(event.type())) {
             return;
         }
-        Payment payment = payments.findBySessionId(event.sessionId())
+        Payment payment = payments.findByProviderSessionId(event.sessionId())
                 .orElseThrow(() -> new NotFoundException("Payment session", event.sessionId()));
         if (!processedEvents.markProcessed(event.eventId())) {
             return;

@@ -16,12 +16,16 @@ import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Use cases after checkout: payment result, status update by managers, cancellation, return and
  * automatic cancellation of unpaid orders (Laboratory Work 2, sequence diagram "payment result").
+ * Every use case is one transaction that first locks the order, so a payment notification, a manager
+ * and the expiry job cannot change one order at the same time.
  */
 @Service
+@Transactional
 public class OrderService {
 
     private final OrderRepository orders;
@@ -40,8 +44,8 @@ public class OrderService {
     }
 
     @EventListener
-    public synchronized void onPaymentSucceeded(PaymentSucceeded event) {
-        Order order = getOrder(event.orderId());
+    public void onPaymentSucceeded(PaymentSucceeded event) {
+        Order order = lockOrder(event.orderId());
         if (order.status() == OrderStatus.NEW) {
             order.markPaid(clock.instant());
             inventoryApi.commit(order.id());
@@ -53,8 +57,8 @@ public class OrderService {
     }
 
     /** Status update by a manager (Processing, Shipped, Delivered, Cancelled or Returned). */
-    public synchronized Order changeStatus(UUID orderId, OrderStatus target, Actor actor, String trackingNumber) {
-        Order order = getOrder(orderId);
+    public Order changeStatus(UUID orderId, OrderStatus target, Actor actor, String trackingNumber) {
+        Order order = lockOrder(orderId);
         Instant now = clock.instant();
         switch (target) {
             case PROCESSING -> {
@@ -82,8 +86,8 @@ public class OrderService {
     }
 
     /** Use case "Order cancellation" by the customer or a manager. */
-    public synchronized Order cancelOrder(UUID orderId, Actor actor, String reason) {
-        Order order = getOrder(orderId);
+    public Order cancelOrder(UUID orderId, Actor actor, String reason) {
+        Order order = lockOrder(orderId);
         boolean stockCommitted = order.status() != OrderStatus.NEW;
         order.cancel(actor, reason, clock.instant());
         if (stockCommitted) {
@@ -100,11 +104,12 @@ public class OrderService {
 
     /** Cancels card orders that were not paid within 30 minutes and releases their stock. */
     @Scheduled(fixedDelayString = "${shopsphere.ordering.unpaid-check-interval:PT1M}")
-    public synchronized void expireUnpaidOrders() {
+    public void expireUnpaidOrders() {
         Instant now = clock.instant();
-        for (Order order : orders.findByStatus(OrderStatus.NEW)) {
-            if (order.isPaymentOverdue(now)) {
-                cancelOrder(order.id(), Actor.system(), "Not paid within " + Order.PAYMENT_TIME_LIMIT.toMinutes() + " minutes");
+        for (UUID orderId : orders.findOverdueIds(now)) {
+            // the order is checked again under the lock: the payment could have arrived a moment ago
+            if (lockOrder(orderId).isPaymentOverdue(now)) {
+                cancelOrder(orderId, Actor.system(), "Not paid within " + Order.PAYMENT_TIME_LIMIT.toMinutes() + " minutes");
             }
         }
     }
@@ -115,7 +120,7 @@ public class OrderService {
         return order;
     }
 
-    private Order getOrder(UUID orderId) {
-        return orders.findById(orderId).orElseThrow(() -> new NotFoundException("Order", orderId));
+    private Order lockOrder(UUID orderId) {
+        return orders.lockById(orderId).orElseThrow(() -> new NotFoundException("Order", orderId));
     }
 }

@@ -7,10 +7,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
 
-/** In-memory storage used until the PostgreSQL schema of the module is created (work item SHOP-16). */
-@Repository
+/** In-memory test double: lets the unit tests of the services run without a database. */
 public class InMemoryCategoryRepository implements CategoryRepository {
 
     private final Map<UUID, Category> categories = new ConcurrentHashMap<>();
@@ -32,7 +30,7 @@ public class InMemoryCategoryRepository implements CategoryRepository {
     }
 
     @Override
-    public void delete(UUID id) {
+    public void deleteById(UUID id) {
         categories.remove(id);
     }
 }
