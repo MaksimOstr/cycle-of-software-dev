@@ -24,9 +24,9 @@ class RegistrationServiceTest {
     private final InMemoryUserRepository users = new InMemoryUserRepository();
     private final Pbkdf2PasswordHasher hasher = new Pbkdf2PasswordHasher();
     private final RecordingEventPublisher events = new RecordingEventPublisher();
-    private final RegistrationService registration =
-            new RegistrationService(users, hasher, events, new MutableClock(Instant.parse("2026-10-05T10:00:00Z")));
-    private final AuthenticationService authentication = new AuthenticationService(users, hasher);
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-10-05T10:00:00Z"));
+    private final RegistrationService registration = new RegistrationService(users, hasher, events, clock);
+    private final AuthenticationService authentication = new AuthenticationService(users, hasher, clock);
 
     @Test
     void registersCustomerWithHashedPassword() {

@@ -1,5 +1,6 @@
 package com.cycleofsoftwaredev.web;
 
+import com.cycleofsoftwaredev.identity.application.AccountLockedException;
 import com.cycleofsoftwaredev.identity.application.AuthenticationException;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.NotFoundException;
@@ -92,6 +93,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler({AuthenticationException.class, UnauthorizedException.class})
     ResponseEntity<ErrorResponse> unauthorized(RuntimeException e) {
         return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", e.getMessage());
+    }
+
+    @ExceptionHandler(AccountLockedException.class)
+    ResponseEntity<ErrorResponse> accountLocked(AccountLockedException e) {
+        return error(HttpStatus.LOCKED, "ACCOUNT_LOCKED", e.getMessage());
     }
 
     @ExceptionHandler(ForbiddenException.class)
