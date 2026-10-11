@@ -24,7 +24,8 @@ The project is developed during the "Software Development Life Cycle" laboratory
 - Postman collection run with Newman for testing the API of the running application
 - PostgreSQL 17: Spring Data JPA (Hibernate) for the repositories, Liquibase for the schema (changes are written
   in SQL), one database schema per module (`catalog`, `inventory`, `cart`, `ordering`, `payment`, `identity`, `reviews`,
-  `administration`). All business data is stored there; only carts are still kept in memory.
+  `administration`). All data is stored there, including carts: the cart of a customer is kept until it is
+  ordered or emptied, the cart of a guest is removed 30 days after its last change.
 - Testcontainers: the integration tests run on a real PostgreSQL started in Docker
 
 ## Architecture
