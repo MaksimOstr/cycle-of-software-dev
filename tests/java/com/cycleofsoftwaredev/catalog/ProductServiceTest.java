@@ -211,4 +211,17 @@ class ProductServiceTest {
         assertThat(new ProductPage(List.of(), 1, 24, 24).totalPages()).isEqualTo(1);
         assertThat(new ProductPage(List.of(), 1, 24, 25).totalPages()).isEqualTo(2);
     }
+
+    /** Requirement "Product variants": every variant has its own article number. */
+    @Test
+    void skuIsUniqueInTheWholeCatalog() {
+        Category phones = categories.createCategory("Smartphones", null);
+        Product first = products.createProduct("Galaxy S30", null, phones.id());
+        Product second = products.createProduct("Galaxy S30 Ultra", null, phones.id());
+        products.addVariant(first.id(), "GS30-128", "128 GB", Money.of("32999"));
+
+        assertThatThrownBy(() -> products.addVariant(second.id(), "gs30-128", "128 GB", Money.of("42999")))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThat(products.getProduct(second.id()).variants()).isEmpty();
+    }
 }

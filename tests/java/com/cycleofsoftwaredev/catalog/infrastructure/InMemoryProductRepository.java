@@ -32,6 +32,13 @@ public class InMemoryProductRepository implements ProductRepository {
     }
 
     @Override
+    public boolean existsByVariantSku(String sku) {
+        return products.values().stream()
+                .flatMap(product -> product.variants().stream())
+                .anyMatch(variant -> variant.sku().equalsIgnoreCase(sku));
+    }
+
+    @Override
     public List<Product> findAll() {
         return List.copyOf(products.values());
     }
