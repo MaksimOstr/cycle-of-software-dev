@@ -1,0 +1,13 @@
+# Starts the integrated ShopSphere application in a container: docker compose up --build
+services:
+  shopsphere:
+    build: .
+    image: shopsphere:latest
+    container_name: shopsphere
+    ports:
+      - "${SHOPSPHERE_PORT:-8080}:8080"
+    environment:
+      # demo users, catalog and stock are loaded at startup
+      SHOPSPHERE_DEMO_DATA_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+    restart: unless-stopped

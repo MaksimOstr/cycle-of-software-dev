@@ -18,6 +18,7 @@ The project is developed during the "Software Development Life Cycle" laboratory
 - Java 25, Spring Boot 4.1 (Spring Web MVC, Bean Validation, Actuator)
 - springdoc-openapi 3.1 (OpenAPI 3 description of the REST API and Swagger UI)
 - Gradle 9 (wrapper included)
+- Docker and Docker Compose for running the application in a container, GitHub Actions for CI
 - JUnit 5, AssertJ, Spring MockMvc for tests, JaCoCo for test coverage
 - Storage: in-memory repositories in this stage. PostgreSQL 17 with Flyway, JWT security, Stripe, Nova Poshta
   and SMTP adapters are the next backlog items (see [Roadmap](#roadmap)).
@@ -71,7 +72,10 @@ uniform error format and role checks.
 /docs               documentation of laboratory works 1–3 (specification, architecture, Agile process)
 README.md           this file
 .gitignore          files excluded from Git (build output, IDE settings, logs)
-build.gradle        build configuration
+build.gradle        build configuration and dependencies
+Dockerfile          multi-stage build of the application image
+docker-compose.yml  starts the application in a container
+.github/workflows   continuous integration (GitHub Actions)
 ```
 
 ## Modules
@@ -105,7 +109,8 @@ build.gradle        build configuration
 
 ### Requirements
 
-- JDK 25 (Gradle itself and all libraries are downloaded by the Gradle wrapper)
+- JDK 25 (Gradle itself and all libraries are downloaded by the Gradle wrapper) **or** Docker with Docker Compose
+  (then nothing else has to be installed)
 - Free port 8080
 
 ### Build and test
@@ -138,11 +143,35 @@ How the versions are kept synchronized:
 - `failOnVersionConflict()` stops the build if two libraries require different versions of one dependency.
 - `./gradlew dependencies --configuration runtimeClasspath` prints the resolved dependency tree.
 
+### Continuous integration
+
+The workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs in GitHub Actions for every pull request
+and for every push to `master`:
+
+1. **Build and test** — `./gradlew build` on JDK 25: compilation, all tests, the 70% coverage check; the test and
+   coverage reports are attached to the run.
+2. **Docker image** — builds the image from the `Dockerfile`, starts the container and waits until the health
+   check answers `UP`.
+
 ### Run
+
+Locally, with the JDK:
 
 ```bash
 ./gradlew bootRun
 ```
+
+Or in a container (the image is built from the sources by the multi-stage [`Dockerfile`](Dockerfile), so the
+result does not depend on the software installed on the computer):
+
+```bash
+docker compose up --build -d      # build the image and start the application
+docker compose ps                 # the container becomes "healthy" when /actuator/health answers UP
+docker compose logs -f            # application log: demo user ids, emails
+docker compose down               # stop and remove the container
+```
+
+Another port can be chosen with `SHOPSPHERE_PORT=9090 docker compose up -d`.
 
 The application starts on `http://localhost:8080` and loads demo data: categories, products with stock and the
 promo code `WELCOME10`. Demo accounts (password in brackets):
