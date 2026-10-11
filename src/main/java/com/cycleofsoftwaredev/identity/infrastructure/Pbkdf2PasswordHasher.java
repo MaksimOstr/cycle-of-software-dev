@@ -35,10 +35,15 @@ public class Pbkdf2PasswordHasher implements PasswordHasher {
         if (parts.length != 3 || rawPassword == null) {
             return false;
         }
-        Base64.Decoder base64 = Base64.getDecoder();
-        byte[] expected = base64.decode(parts[2]);
-        byte[] actual = derive(rawPassword, base64.decode(parts[1]), Integer.parseInt(parts[0]));
-        return MessageDigest.isEqual(expected, actual);
+        try {
+            Base64.Decoder base64 = Base64.getDecoder();
+            byte[] expected = base64.decode(parts[2]);
+            byte[] actual = derive(rawPassword, base64.decode(parts[1]), Integer.parseInt(parts[0]));
+            return MessageDigest.isEqual(expected, actual);
+        } catch (IllegalArgumentException damagedHash) {
+            // not a number of iterations or not Base64: a damaged value matches no password
+            return false;
+        }
     }
 
     private static byte[] derive(String rawPassword, byte[] salt, int iterations) {

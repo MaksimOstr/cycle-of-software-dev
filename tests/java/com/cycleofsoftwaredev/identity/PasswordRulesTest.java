@@ -54,7 +54,8 @@ class PasswordRulesTest {
 
     /** A damaged value in the database must look like a wrong password, not like a server error. */
     @ParameterizedTest
-    @ValueSource(strings = {"", "plain-text-password", "100000:salt"})
+    @ValueSource(strings = {"", "plain-text-password", "100000:salt", "abc:def:ghi", "100000:!!!:???", "0:AAAA:AAAA",
+            "-5:AAAA:AAAA"})
     void damagedHashMatchesNoPassword(String storedHash) {
         assertThat(hasher.matches("Customer12345", storedHash)).isFalse();
     }
