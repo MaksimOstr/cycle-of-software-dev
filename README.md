@@ -208,6 +208,7 @@ Emails are written to the application log (`EMAIL to=...`).
 | `GET/POST /api/v1/products/{id}/reviews` | Reviews | everyone / customer who received the product |
 | `POST /api/v1/payments/webhook` | Payment provider notifications | payment provider |
 | `/api/v1/management/**` (create, edit and delete categories and products, hide products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
+| `GET /api/v1/management/orders?status=&paymentMethod=&deliveryMethod=&from=&to=&search=` | Order list with filters and search by order number, customer email or phone | manager, administrator |
 | `/api/v1/admin/**` (delivery settings, audit log, sales report) | Administration | administrator |
 | `GET /api/v1/admin/users?query=`, `GET /api/v1/admin/users/{id}`, `POST /api/v1/admin/users/{id}/block`, `POST .../unblock`, `PUT /api/v1/admin/users/{id}/role` | User management: search, block and unblock accounts, assign roles; every change is written to the audit log | administrator |
 
@@ -231,6 +232,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | `MoneyTest`, `OrderTest` | Value object arithmetic; every transition of the order state machine (Lab 2, Figure 8) |
 | `RegistrationServiceTest`, `AccountSecurityTest`, `UserManagementServiceTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
 | `CheckoutServiceTest`, `OrderServiceTest` | Checkout and payment scenarios of Lab 2, Figures 6 and 7: idempotency, stock reservation, unpaid order expiry, late payment refund, cancellation, return |
+| `OrderListTest` | Filters and search of the manager's order list |
 | `DeliveryCostPolicyContractTest` | Liskov substitution contract of all delivery cost policies |
 | `ModuleBoundariesTest` | Module boundaries and dependency rules of the architecture |
 | `ShopApiIntegrationTest`, `CycleOfSoftwareDevApplicationTests` | The whole application through the REST API |
