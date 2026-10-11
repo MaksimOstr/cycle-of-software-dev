@@ -379,7 +379,7 @@ tokens for the next ones, so nothing has to be copied by hand.
 | `POST /api/v1/payments/webhook` | Payment provider notifications | payment provider |
 | `/api/v1/management/**` (create, edit and delete categories and products, hide products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
 | `GET /api/v1/management/orders?status=&paymentMethod=&deliveryMethod=&from=&to=&search=&page=&size=` | Order list with filters and search by order number, customer email or phone; newest first, 50 per page | manager, administrator |
-| `/api/v1/admin/**` (delivery settings, audit log, sales report) | Administration | administrator |
+| `/api/v1/admin/**` (delivery settings, audit log `?limit=` up to 500 newest records, sales report) | Administration | administrator |
 | `GET /api/v1/admin/users?query=`, `GET /api/v1/admin/users/{id}`, `POST /api/v1/admin/users/{id}/block`, `POST .../unblock`, `PUT /api/v1/admin/users/{id}/role` | User management: search, block and unblock accounts, assign roles; every change is written to the audit log | administrator |
 
 Every error, including malformed JSON and unknown paths, is returned in one format:
@@ -501,7 +501,7 @@ does not exist yet, the others need the production environment).
 | Peak order throughput (50 orders per minute) | Partial | 20 simultaneous checkouts are processed in less than a second in the test; a long load test was not done |
 | **4.2 Scalability** | | |
 | Adding servers | Partial | The application is stateless: no session (JWT), all data in PostgreSQL and Redis, order numbers from a database sequence, row locks instead of in-process locks. Running several instances behind a load balancer was not tested |
-| Data volume | Partial | Data is stored in PostgreSQL with indexes on the lookup columns. The catalog search, the order list and the sales statistics are SQL queries that return one page or one aggregate. The audit log, the user search and the product list of the Management Panel still load whole tables |
+| Data volume | Partial | Data is stored in PostgreSQL with indexes on the lookup columns. The catalog search, the order list, the user search, the audit log and the sales statistics are SQL queries that return one page or one aggregate. Only the product list of the Management Panel is still returned as a whole. Not tested with 100,000 products and 1,000,000 orders |
 | **4.3 Reliability and availability** | | |
 | Availability 99.5% | Partial | Health check `/actuator/health` covers the application, PostgreSQL and Redis; Docker `HEALTHCHECK`, `restart: unless-stopped`, graceful shutdown. There is no production hosting to measure |
 | Backups and recovery | Not met | The data is kept in a Docker volume and survives restarts, but there is no automatic backup |
@@ -599,6 +599,7 @@ Branches of the move to real storage and security (after Lab 5, in merge order):
 | `feature/postgres-carts` | Maksym | Ivan | Carts in PostgreSQL, removal of abandoned guest carts |
 | `feature/jwt-security` | Ivan | Maksym | Spring Security, JWT access and refresh tokens, logout, login rate limit, Redis, Postman collection with tokens |
 | `feature/sql-search` | Maksym | Ivan | Catalog search, order list and sales statistics as SQL queries with paging; stock of a page in one query |
+| `feature/sql-admin-queries` | Ivan | Maksym | User search and the newest records of the audit log as SQL queries with a limit |
 
 ## Roadmap
 
