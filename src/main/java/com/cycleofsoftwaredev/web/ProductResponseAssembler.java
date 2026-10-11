@@ -20,6 +20,7 @@ public class ProductResponseAssembler {
                 .map(variant -> new ProductResponse.Variant(variant.id(), variant.sku(), variant.name(), variant.price(),
                         inventory.availableQuantity(variant.id())))
                 .toList();
-        return new ProductResponse(product.id(), product.name(), product.description(), product.categoryId(), variants);
+        return new ProductResponse(product.id(), product.name(), product.description(), product.categoryId(),
+                product.isActive(), variants);
     }
 }

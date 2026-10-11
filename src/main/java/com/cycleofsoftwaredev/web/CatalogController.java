@@ -1,7 +1,9 @@
 package com.cycleofsoftwaredev.web;
 
 import com.cycleofsoftwaredev.catalog.application.CategoryService;
+import com.cycleofsoftwaredev.catalog.application.ProductPage;
 import com.cycleofsoftwaredev.catalog.application.ProductService;
+import com.cycleofsoftwaredev.catalog.application.ProductSort;
 import com.cycleofsoftwaredev.catalog.domain.Category;
 import java.util.List;
 import java.util.UUID;
@@ -26,19 +28,28 @@ public class CatalogController {
         this.assembler = assembler;
     }
 
+    public record ProductPageResponse(List<ProductResponse> items, int page, int size, int totalItems, int totalPages) {
+    }
+
     @GetMapping("/categories")
     public List<Category> categories() {
         return categories.listCategories();
     }
 
+    /** Product listing and search: one page of products, 24 per page by default. */
     @GetMapping("/products")
-    public List<ProductResponse> products(@RequestParam(required = false) String query,
-                                          @RequestParam(required = false) UUID categoryId) {
-        return products.search(query, categoryId).stream().map(assembler::toResponse).toList();
+    public ProductPageResponse products(@RequestParam(required = false) String query,
+                                        @RequestParam(required = false) UUID categoryId,
+                                        @RequestParam(defaultValue = "NAME") ProductSort sort,
+                                        @RequestParam(defaultValue = "1") int page,
+                                        @RequestParam(defaultValue = "" + ProductPage.DEFAULT_SIZE) int size) {
+        ProductPage result = products.searchPage(query, categoryId, sort, page, size);
+        return new ProductPageResponse(result.items().stream().map(assembler::toResponse).toList(),
+                result.page(), result.size(), result.totalItems(), result.totalPages());
     }
 
     @GetMapping("/products/{productId}")
     public ProductResponse product(@PathVariable UUID productId) {
-        return assembler.toResponse(products.getProduct(productId));
+        return assembler.toResponse(products.getVisibleProduct(productId));
     }
 }
