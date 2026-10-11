@@ -39,6 +39,14 @@ public class OrderQueryService implements PurchaseVerificationApi, SalesStatisti
                 .toList();
     }
 
+    /** Use case "Order list" of the Management Panel: orders that match the filter, newest first. */
+    public List<Order> findOrders(OrderFilter filter) {
+        return orders.findAll().stream()
+                .filter(filter::matches)
+                .sorted(Comparator.comparing(Order::createdAt).reversed().thenComparing(Order::number, Comparator.reverseOrder()))
+                .toList();
+    }
+
     @Override
     public boolean hasReceivedProduct(UUID customerId, UUID productId) {
         return orders.findByCustomerId(customerId).stream()
