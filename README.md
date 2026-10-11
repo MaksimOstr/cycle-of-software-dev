@@ -422,6 +422,9 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | `ShopApiIntegrationTest`, `CycleOfSoftwareDevApplicationTests` | The whole application through the REST API, on PostgreSQL and Redis in Testcontainers |
 | `AuthenticationApiTest` | JWT: login, forged and expired tokens, access rules by role, refresh token rotation, logout, blocked users, login rate limit |
 | `CartPersistenceTest` | Carts in PostgreSQL: items keep their order, abandoned guest carts are removed after 30 days |
+| `CatalogStorageTest`, `InventoryStorageTest`, `OrderStorageTest`, `PaymentStorageTest` | Storage of the modules in PostgreSQL (Testcontainers): data is read back as it was saved, unique article number, idempotency key and one payment per order, constraints of the tables, order list and sales statistics in SQL, row locks for 20 simultaneous reservations, unique order numbers |
+| `CheckoutTransactionTest` | Ordering, Cart, Inventory and Payment in one database transaction: a checkout that fails at the payment provider leaves no order, no reservation and a full cart; payment notification, expiry of an unpaid order, refund of a late payment |
+| `DatabaseSchemaTest` | Liquibase changelog on an empty database: every change is applied, one schema per module, indexes of the lookups |
 | `ProductSearchPostgresTest` | Catalog search executed by PostgreSQL: text in name and description, category with subcategories, sorting, paging, special characters |
 | `SystemIntegrationTest` | Integration of all modules: a cash order from catalog to review and a card order with payment, cancellation and refund; emails, sales report and audit log |
 | `NonFunctionalRequirementsTest` | 95% of catalog, search and cart responses within 500 ms on 5,000 products; 20 simultaneous orders for 5 items create exactly 5 orders |
@@ -619,6 +622,7 @@ Branches of Lab 6 (testing and validation, in merge order):
 | Branch | Author | Reviewer | Result |
 |--------|--------|----------|--------|
 | `feature/domain-unit-tests` | Maksym | Ivan | Test levels as Gradle tasks; unit tests of the domain rules of cart, stock, catalog, orders and payments; fixes of the three defects they found |
+| `feature/storage-component-tests` | Maksym | Ivan | Component tests of the catalog, stock, order and payment storage, of the checkout transaction and of the database schema on PostgreSQL in Testcontainers |
 
 ## Roadmap
 
