@@ -16,7 +16,7 @@ The project is developed during the "Software Development Life Cycle" laboratory
 
 ## Technology stack
 
-- Java 25, Spring Boot 4.1 (Spring Web MVC, Bean Validation, Actuator)
+- Java 25, Spring Boot 4.1 (Spring Web MVC, Spring Security, Spring Data JPA, Bean Validation, Actuator)
 - springdoc-openapi 3.1 (OpenAPI 3 description of the REST API and Swagger UI)
 - Gradle 9 (wrapper included)
 - Docker and Docker Compose for running the application in a container, GitHub Actions for CI
@@ -26,7 +26,10 @@ The project is developed during the "Software Development Life Cycle" laboratory
   in SQL), one database schema per module (`catalog`, `inventory`, `cart`, `ordering`, `payment`, `identity`, `reviews`,
   `administration`). All data is stored there, including carts: the cart of a customer is kept until it is
   ordered or emptied, the cart of a guest is removed 30 days after its last change.
-- Testcontainers: the integration tests run on a real PostgreSQL started in Docker
+- Spring Security with JWT: stateless authentication, short-lived access tokens signed with HMAC-SHA256,
+  refresh tokens, access rules by role
+- Redis 8: refresh tokens and the counters of login attempts — short-lived data that expires by itself
+- Testcontainers: the integration tests run on a real PostgreSQL and Redis started in Docker
 
 ## Architecture
 
@@ -54,7 +57,7 @@ and asynchronously through domain events (`OrderPlaced`, `OrderStatusChanged`, `
 `UserRegistered`) published through `DomainEventPublisher`. Notifications and the audit log listen to these events.
 
 The REST API (`web` package) corresponds to the Web & Security Layer: controllers, request validation, the
-uniform error format and role checks.
+uniform error format, JWT authentication (`web.security`) and role checks.
 
 ## Repository structure
 
@@ -73,6 +76,7 @@ uniform error format and role checks.
   notification/     emails sent in reaction to domain events
   administration/   store settings, audit log, sales dashboard
   web/              REST controllers, error handling, current user resolution
+  web/security/     Spring Security configuration, JWT access tokens, refresh tokens, login rate limit
   bootstrap/        demo data for local runs
 /src/main/resources application.properties
                     db/changelog: Liquibase changelog, schema changes in SQL
@@ -110,17 +114,18 @@ docker-compose.yml  starts the application in a container
 |-----------|---------------------|
 | **S** — Single Responsibility | `User` keeps only user data; password hashing is in `PasswordHasher`, password rules in `PasswordPolicy`, login in `AuthenticationService`, registration in `RegistrationService`. `CheckoutService` places orders, `OrderService` manages them after checkout, `OrderQueryService` only reads. |
 | **O** — Open/Closed | `DeliveryService` receives all `DeliveryCostPolicy` beans: a new delivery method is a new policy class, `DeliveryService` is not changed (see `DeliveryServiceTest.newDeliveryMethodIsAddedWithoutChangingTheService`). `NotificationService` works with a list of `EmailComposer`s: a new email is a new composer. |
-| **L** — Liskov Substitution | All `DeliveryCostPolicy` implementations (`CourierCostPolicy`, `NovaPoshtaCostPolicy`, `StorePickupCostPolicy`) follow one contract — the cost is never null or negative and does not grow with the subtotal. `DeliveryCostPolicyContractTest` runs the same checks against every implementation. In-memory repositories can be replaced with database ones without changing the services. |
+| **L** — Liskov Substitution | All `DeliveryCostPolicy` implementations (`CourierCostPolicy`, `NovaPoshtaCostPolicy`, `StorePickupCostPolicy`) follow one contract — the cost is never null or negative and does not grow with the subtotal. `DeliveryCostPolicyContractTest` runs the same checks against every implementation. The repositories are substitutable too: the unit tests run the services with in-memory repositories and the application runs them with Spring Data JPA ones. |
 | **I** — Interface Segregation | The Ordering module exposes two narrow interfaces instead of one: `PurchaseVerificationApi` for Reviews and `SalesStatisticsApi` for the sales dashboard. The payment provider port is split into `PaymentGateway` (sessions) and `RefundGateway` (refunds). |
-| **D** — Dependency Inversion | Services depend on abstractions: repositories (`OrderRepository`, `UserRepository`, …), gateways (`PaymentGateway`, `EmailSender`), other modules' APIs (`InventoryApi`, `CartApi`, …), `DomainEventPublisher` and `Clock`. Concrete classes (`InMemoryOrderRepository`, `SimulatedPaymentProvider`, `LoggingEmailSender`) are injected by Spring, so PostgreSQL, Stripe or SMTP can be plugged in without changing business code. |
+| **D** — Dependency Inversion | Services depend on abstractions: repositories (`OrderRepository`, `UserRepository`, …), gateways (`PaymentGateway`, `EmailSender`), other modules' APIs (`InventoryApi`, `CartApi`, …), `DomainEventPublisher` and `Clock`. Concrete classes (`JpaOrderRepository`, `SimulatedPaymentProvider`, `LoggingEmailSender`) are injected by Spring. The move from in-memory storage to PostgreSQL replaced only the repository implementations, the services were not changed; Stripe or SMTP can be plugged in the same way. |
 
 ## Integration of the system (Laboratory Work 5)
 
 **Integration method.** The architecture is a modular monolith, so all components are integrated locally into one
 Spring Boot application: Spring creates the services of every module and connects them through the `api`
-interfaces and domain events. The integrated system is then packed into a Docker image, which makes the result
-independent of the developer's computer, and is checked from outside through the REST API with a Postman
-collection. Microservice communication does not have to be configured.
+interfaces and domain events. The application is integrated with its infrastructure — PostgreSQL and Redis —
+through Docker Compose, and the whole system is packed into containers, which makes the result independent of
+the developer's computer. It is checked from outside through the REST API with a Postman collection.
+Microservice communication does not have to be configured.
 
 **Integration points** and the tests that check them:
 
@@ -136,7 +141,10 @@ collection. Microservice communication does not have to be configured.
 | Identity, Ordering → Notification | events `UserRegistered`, `PasswordResetRequested`, `OrderPlaced`, `OrderStatusChanged` become emails | `NotificationServiceTest`, `SystemIntegrationTest` |
 | All modules → Audit log | every domain event is recorded by `AuditLogService` | `AdministrationTest`, `SystemIntegrationTest` |
 | Module boundaries | a module imports only the `api` package of another module | `ModuleBoundariesTest` |
-| Application → environment | Docker image with a health check, the same build in CI | CI job "Docker image", Postman collection |
+| Web layer → Spring Security | every request passes the security filter chain: the JWT is validated, the role is checked by URL rules, then by `CurrentUserResolver` | `AuthenticationApiTest`, `ShopApiIntegrationTest` |
+| Application → PostgreSQL | Spring Data JPA repositories, Liquibase changelog, transactions and row locks of the services | all Spring tests (Testcontainers), `CartPersistenceTest` |
+| Application → Redis | refresh tokens and the login rate limit through `StringRedisTemplate` | `AuthenticationApiTest` |
+| Application → environment | Docker Compose: PostgreSQL, Redis and the application image with health checks; the same in CI | CI job "Docker image", Postman collection |
 
 **How the integration was done:**
 
@@ -147,27 +155,38 @@ collection. Microservice communication does not have to be configured.
    modules) and `NonFunctionalRequirementsTest` (response time, simultaneous orders for the last items).
 4. The application is started in a container (`docker compose up --build`) and the Postman collection
    [`docs/lab-5/ShopSphere.postman_collection.json`](docs/lab-5/ShopSphere.postman_collection.json) is run against
-   it: 49 requests with 80 checks, all pass.
+   it: 54 requests with 91 checks, all pass.
 5. GitHub Actions repeats the build, the tests and the container start for every pull request.
 
 Features completed in Lab 5 (they were missing after Lab 4): password recovery, account lock after failed logins,
 user management for administrators, editing, hiding and deleting products, renaming and deleting categories,
 sorting and pagination of the product list, the order list with filters for managers.
 
+After that the application was moved from in-memory storage to real infrastructure:
+
+- **PostgreSQL** stores all data (users, catalog, stock, carts, promo codes, orders, payments, reviews, audit log,
+  settings); the schema is created by Liquibase changes written in SQL, one database schema per module.
+- **Transactions**: every use case of a service is one transaction. Checkout either reserves the stock, saves
+  the order and creates the payment, or changes nothing. Stock rows and orders are locked with
+  `SELECT ... FOR UPDATE` while they are changed, so simultaneous orders cannot oversell.
+- **JWT**: login returns an access token (15 minutes) and a refresh token (7 days); the server keeps no session.
+- **Redis** keeps what must expire by itself: refresh tokens (so logout and token rotation work) and the
+  counters that limit login and registration to 20 requests per minute per IP address.
+
 ## Getting started
 
 ### Requirements
 
-- Docker with Docker Compose: PostgreSQL runs in a container, and the tests start their own PostgreSQL with
-  Testcontainers
+- Docker with Docker Compose: PostgreSQL and Redis run in containers, and the tests start their own PostgreSQL
+  and Redis with Testcontainers
 - JDK 25 to build and run from the sources (Gradle and all libraries are downloaded by the Gradle wrapper);
   it is not needed if the application is started in a container too
-- Free ports 8080 (application) and 5432 (PostgreSQL)
+- Free ports 8080 (application), 5432 (PostgreSQL) and 6379 (Redis)
 
 ### Build and test
 
 ```bash
-# Docker must be running: the integration tests start PostgreSQL in a container
+# Docker must be running: the integration tests start PostgreSQL and Redis in containers
 ./gradlew build        # compile, run all tests and check the test coverage (Windows: gradlew.bat build)
 ./gradlew test         # run tests only; report: build/reports/tests/test/index.html
                        # coverage report: build/reports/jacoco/test/html/index.html
@@ -187,7 +206,9 @@ nothing has to be installed manually.
 | `spring-boot-starter-data-jpa` | 4.1.1 (Spring Boot BOM), Hibernate 7.4 | repositories and transactions |
 | `spring-boot-starter-liquibase` | 4.1.1 (Spring Boot BOM), Liquibase 5.0 | database schema migrations |
 | `org.postgresql:postgresql` | 42.7 (Spring Boot BOM) | PostgreSQL JDBC driver |
-| `spring-boot-testcontainers`, `testcontainers-postgresql` | 4.1.1 / 2.0 (Spring Boot BOM) | PostgreSQL in Docker for the integration tests |
+| `spring-boot-starter-security`, `spring-boot-starter-security-oauth2-resource-server` | 4.1.1 (Spring Boot BOM), Spring Security 7.1 | authentication, access rules, signing and validation of JWT |
+| `spring-boot-starter-data-redis` | 4.1.1 (Spring Boot BOM), Lettuce 7.5 | Redis client: refresh tokens, login rate limit |
+| `spring-boot-testcontainers`, `testcontainers-postgresql` | 4.1.1 / 2.0 (Spring Boot BOM) | PostgreSQL and Redis in Docker for the integration tests |
 | `spring-boot-starter-test`, `spring-boot-starter-webmvc-test` | 4.1.1 (Spring Boot BOM) | JUnit 5, AssertJ, MockMvc |
 | JaCoCo (Gradle plugin) | 0.8.15 | test coverage report and the 70% coverage check |
 
@@ -206,28 +227,28 @@ How the versions are kept synchronized:
 The workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs in GitHub Actions for every pull request
 and for every push to `master`:
 
-1. **Build and test** — `./gradlew build` on JDK 25: compilation, all tests, the 70% coverage check; the test and
-   coverage reports are attached to the run.
-2. **Docker image** — builds the image from the `Dockerfile`, starts the container and waits until the health
-   check answers `UP`.
+1. **Build and test** — `./gradlew build` on JDK 25: compilation, all tests (PostgreSQL and Redis are started by
+   Testcontainers), the 70% coverage check; the test and coverage reports are attached to the run.
+2. **Docker image** — `docker compose up --build --wait` builds the image and starts it with PostgreSQL and Redis;
+   the job passes when all health checks pass, the catalog answers and the demo administrator can sign in.
 
 ### Run
 
-The application needs PostgreSQL. [`docker-compose.yml`](docker-compose.yml) starts it with the database,
-user and password that the application uses by default, so nothing has to be configured.
+The application needs PostgreSQL and Redis. [`docker-compose.yml`](docker-compose.yml) starts them with the
+database, user, password and ports that the application uses by default, so nothing has to be configured.
 
 **Databases in Docker, the application from the sources** (convenient for development and for a demo):
 
 ```bash
-docker compose up -d postgres     # PostgreSQL 17 on localhost:5432
-./gradlew bootRun                 # the application on http://localhost:8080
+docker compose up -d postgres redis   # PostgreSQL 17 on localhost:5432, Redis 8 on localhost:6379
+./gradlew bootRun                     # the application on http://localhost:8080
 ```
 
 **Everything in containers** (the image is built from the sources by the multi-stage [`Dockerfile`](Dockerfile)):
 
 ```bash
-docker compose up --build -d      # PostgreSQL and the application
-docker compose ps                 # both containers become "healthy"
+docker compose up --build -d      # PostgreSQL, Redis and the application
+docker compose ps                 # all three containers become "healthy"
 docker compose logs -f shopsphere # application log: applied migrations, demo user ids, emails
 docker compose down               # stop; the data stays in the volume
 docker compose down -v            # stop and delete the data
@@ -237,8 +258,13 @@ docker compose down -v            # stop and delete the data
 |---------|----------------------|---------|
 | Database URL | `SHOPSPHERE_DB_URL` | `jdbc:postgresql://localhost:5432/shopsphere` |
 | Database user and password | `SHOPSPHERE_DB_USER`, `SHOPSPHERE_DB_PASSWORD` | `shopsphere` / `shopsphere` (local development only) |
-| Ports published by Docker Compose | `SHOPSPHERE_PORT`, `POSTGRES_PORT` | `8080`, `5432` |
-| Password of the PostgreSQL container | `POSTGRES_PASSWORD` (for example in a `.env` file, which is not committed) | `shopsphere` |
+| Redis host and port | `SHOPSPHERE_REDIS_HOST`, `SHOPSPHERE_REDIS_PORT` | `localhost`, `6379` |
+| Signing key of the access tokens (at least 32 characters) | `SHOPSPHERE_JWT_SECRET` | empty: a random key is generated at every start, so tokens stop working after a restart |
+| Ports published by Docker Compose | `SHOPSPHERE_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | `8080`, `5432`, `6379` |
+| Password of the PostgreSQL container | `POSTGRES_PASSWORD` | `shopsphere` |
+
+Secrets are never written into the repository: for Docker Compose copy [`.env.example`](.env.example) to `.env`
+(the file is in `.gitignore`) and set `POSTGRES_PASSWORD` and `SHOPSPHERE_JWT_SECRET` there.
 
 At startup Liquibase applies the changes from [`src/main/resources/db/changelog`](src/main/resources/db/changelog)
 that are not in the database yet, and Hibernate checks that the entities match the schema
@@ -254,9 +280,32 @@ promo code `WELCOME10` (only into an empty database). Demo accounts (password in
 | Manager | `manager@shopsphere.local` (`Manager12345`) |
 | Customer | `customer@shopsphere.local` (`Customer12345`) |
 
-Until JWT authentication is implemented (backlog item SHOP-17), the caller is identified by the `X-User-Id`
-header. The ids of the demo users are printed in the log at startup, and `POST /api/v1/auth/login` returns the id
-of any user.
+### Authentication
+
+The API uses JWT. `POST /api/v1/auth/login` checks the email and the password and returns two tokens:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" \
+     -d '{"email":"manager@shopsphere.local","password":"Manager12345"}'
+# {"accessToken":"eyJhbGciOiJIUzI1NiJ9...","refreshToken":"...","tokenType":"Bearer","expiresIn":900,"user":{...}}
+
+curl http://localhost:8080/api/v1/management/orders -H "Authorization: Bearer <accessToken>"
+```
+
+- The **access token** is a JWT signed with HMAC-SHA256. It contains the user id, the role and the expiry time
+  (15 minutes) and is sent with every request in the `Authorization: Bearer` header. The server keeps no session,
+  so any instance of the application can serve the request.
+- The **refresh token** (7 days) is exchanged for a new pair with `POST /api/v1/auth/refresh`. It works once:
+  the used token is removed from Redis and a new one is issued. `POST /api/v1/auth/logout` removes the refresh
+  token, after that new access tokens cannot be obtained.
+- Access rules are checked by Spring Security: `/api/v1/admin/**` needs the Administrator role,
+  `/api/v1/management/**` — Manager or Administrator, the order history, cancellation and reviews — any signed-in
+  user. The catalog, carts, checkout and order tracking by email are open for guests.
+- The user is also read from the database on every request, so a blocked account is rejected at once, although
+  its token has not expired yet.
+- Login, registration and password reset are limited to 20 requests per minute from one IP address (HTTP 429).
+
+In Swagger UI: call `POST /api/v1/auth/login`, copy `accessToken`, press **Authorize** and paste it.
 
 ### Example: buy a product
 
@@ -291,26 +340,30 @@ Emails are written to the application log (`EMAIL to=...`).
 
 | URL | What it is |
 |-----|------------|
-| `http://localhost:8080/swagger-ui.html` | Swagger UI: every endpoint can be called from the browser |
+| `http://localhost:8080/swagger-ui.html` | Swagger UI: every endpoint can be called from the browser; the **Authorize** button accepts the access token |
 | `http://localhost:8080/v3/api-docs` | OpenAPI 3 description of the REST API (JSON) |
-| `http://localhost:8080/actuator/health` | Health check: `{"status":"UP"}` while the application is running |
+| `http://localhost:8080/actuator/health` | Health check: `{"status":"UP"}` while the application, PostgreSQL and Redis are working |
 
 ### Postman collection
 
 [`docs/lab-5/ShopSphere.postman_collection.json`](docs/lab-5/ShopSphere.postman_collection.json) contains the whole
-scenario for the running application with demo data: health check, registration and login, catalog management,
-cart, checkout, card payment, order processing, review moderation, user management, sales report, audit log and
-error cases. Every request saves the ids for the next ones, so nothing has to be copied by hand.
+scenario for the running application with demo data: health check, registration, login and token refresh, catalog
+management, cart, checkout, card payment, order processing, review moderation, user management, sales report,
+audit log, error cases and logout — 54 requests with 91 checks. Every request saves the ids and the access
+tokens for the next ones, so nothing has to be copied by hand.
 
 - Postman: *Import* → choose the file → *Run collection*.
 - Command line (Node.js is required): `npx newman run docs/lab-5/ShopSphere.postman_collection.json`
+- The collection signs in several times, so it can be run twice a minute; the third run in the same minute gets
+  HTTP 429 from the login rate limit.
 - Another address: add `--env-var baseUrl=http://localhost:9090`.
 
 ### REST API overview
 
 | Method and path | Description | Access |
 |-----------------|-------------|--------|
-| `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Registration and login; the account is locked for 15 minutes after 5 failed logins | everyone |
+| `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Registration; login returns the access and refresh tokens. The account is locked for 15 minutes after 5 failed logins | everyone |
+| `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` | New pair of tokens for a refresh token; logout (the refresh token is revoked); the signed-in user | everyone with a refresh token / signed-in user |
 | `POST /api/v1/auth/password-reset`, `POST /api/v1/auth/password-reset/confirm` | Password recovery: a code is sent by email, is valid for 1 hour and works once | everyone |
 | `GET /api/v1/categories`, `GET /api/v1/products?query=&categoryId=&sort=&page=&size=`, `GET /api/v1/products/{id}` | Catalog: category tree (up to 3 levels), search, products of a category with its subcategories, sorting (`NAME`, `PRICE_ASC`, `PRICE_DESC`), pages of 24 products | everyone |
 | `POST /api/v1/carts`, `GET /api/v1/carts/{id}`, `POST/PUT/DELETE /api/v1/carts/{id}/items[/{variantId}]`, `POST /api/v1/carts/{id}/promo-code` | Cart | everyone |
@@ -330,10 +383,11 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | Status | Code | When |
 |--------|------|------|
 | 400 | `VALIDATION_FAILED`, `MALFORMED_REQUEST`, `BAD_REQUEST` | invalid fields (listed in `fieldErrors`), unreadable JSON or unknown enum value, missing or invalid parameter or header |
-| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN`, `ACCOUNT_BLOCKED` | unknown user or wrong password / the role or owner does not match, the account is blocked by an administrator |
+| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN`, `ACCOUNT_BLOCKED` | no access token, an invalid or expired one, wrong password / the role or owner does not match, the account is blocked by an administrator |
 | 404 | `NOT_FOUND` | entity or path does not exist |
 | 405 / 415 | `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | wrong HTTP method / body is not JSON |
-| 409 | `BUSINESS_RULE_VIOLATED` | a business rule is violated, for example "Only 1 item(s) left" |
+| 409 | `BUSINESS_RULE_VIOLATED`, `CONFLICT` | a business rule is violated, for example "Only 1 item(s) left"; the same data is being changed by another request |
+| 429 | `TOO_MANY_REQUESTS` | more than 20 login, registration or password reset requests per minute from one address |
 | 423 | `ACCOUNT_LOCKED` | too many failed login attempts |
 | 500 | `INTERNAL_ERROR` | unexpected error; details are written only to the log |
 
@@ -347,30 +401,35 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | `OrderListTest` | Filters and search of the manager's order list |
 | `DeliveryCostPolicyContractTest` | Liskov substitution contract of all delivery cost policies |
 | `ModuleBoundariesTest` | Module boundaries and dependency rules of the architecture |
-| `ShopApiIntegrationTest`, `CycleOfSoftwareDevApplicationTests` | The whole application through the REST API |
+| `ShopApiIntegrationTest`, `CycleOfSoftwareDevApplicationTests` | The whole application through the REST API, on PostgreSQL and Redis in Testcontainers |
+| `AuthenticationApiTest` | JWT: login, forged and expired tokens, access rules by role, refresh token rotation, logout, blocked users, login rate limit |
+| `CartPersistenceTest` | Carts in PostgreSQL: items keep their order, abandoned guest carts are removed after 30 days |
 | `SystemIntegrationTest` | Integration of all modules: a cash order from catalog to review and a card order with payment, cancellation and refund; emails, sales report and audit log |
 | `NonFunctionalRequirementsTest` | 95% of catalog, search and cart responses within 500 ms on 5,000 products; 20 simultaneous orders for 5 items create exactly 5 orders |
 | `PlatformEndpointsTest` | Health check and OpenAPI document |
 
-121 tests; line coverage of the server code is about 95% (JaCoCo), the build fails below 70%.
+131 tests; line coverage of the server code is about 94% (JaCoCo), the build fails below 70%. The unit tests of
+the services use in-memory repositories from `/tests` and run in milliseconds; every test that starts the
+application works with the real PostgreSQL and Redis.
 
 ## Requirements fulfillment
 
 Status of every requirement of the Requirements Specification (Laboratory Work 1). **Done** — works as specified;
 **Partial** — the main part works, the difference is described; **Not implemented** — left in the backlog.
-The scope of the labs is the server side: the React storefront, PostgreSQL, JWT and the real Stripe, Nova Poshta
-and SMTP adapters are the next backlog items, and the code already has ports (interfaces) for them.
+The scope of the labs is the server side with real storage and security: PostgreSQL, Redis and JWT are in place.
+The React storefront and the adapters of external services (Stripe, Nova Poshta, SMTP) are not implemented;
+the code has ports (interfaces) for them and simulated implementations.
 
 ### Functional requirements
 
-17 of 44 requirements are done, 16 are partial, 11 are not implemented. Of the 23 High-priority requirements
-15 are done and 8 are partial.
+18 of 44 requirements are done, 15 are partial, 11 are not implemented. Of the 23 High-priority requirements
+16 are done and 7 are partial.
 
 | Requirement | Priority | Status | How it is fulfilled |
 |-------------|----------|--------|---------------------|
 | **3.1 User account management** | | | |
 | User registration | High | Partial | `POST /auth/register`: unique email, password of 8+ characters with a letter and a digit, welcome email. The confirmation link is not implemented: the account is active at once |
-| Login and logout | High | Partial | `POST /auth/login`; the account is locked for 15 minutes after 5 failed attempts. There are no sessions yet (the caller sends `X-User-Id`), so there is nothing to log out from |
+| Login and logout | High | Done | `POST /auth/login` returns a JWT access token and a refresh token; `POST /auth/logout` revokes the refresh token. The account is locked for 15 minutes after 5 failed attempts |
 | Password recovery | High | Done | `POST /auth/password-reset` sends a code by email, valid for 1 hour and usable once; `.../confirm` sets the new password |
 | Profile editing | Medium | Not implemented | |
 | Address book | Medium | Not implemented | The address is entered at checkout |
@@ -385,7 +444,7 @@ and SMTP adapters are the next backlog items, and the code already has ports (in
 | Product variants | High | Done | Every variant has its own SKU, price and stock |
 | Recently viewed products | Low | Not implemented | |
 | **3.3 Shopping cart and wishlist** | | | |
-| Add to cart | High | Partial | Carts for guests and customers. The 30-day storage and merging of the guest cart after login are not implemented |
+| Add to cart | High | Partial | Carts for guests and customers are stored in PostgreSQL; the cart of a guest is removed 30 days after its last change. Merging of the guest cart after login is not implemented |
 | Manage cart | High | Done | Change quantity, remove items, quantity is limited by the stock, subtotal and discount are recalculated; the delivery cost is added at checkout |
 | Promo codes | Medium | Partial | One code per order, percentage discount, validity period, usage limit. Fixed discount and minimum order amount are not implemented |
 | Wishlist | Low | Not implemented | |
@@ -424,30 +483,30 @@ and SMTP adapters are the next backlog items, and the code already has ports (in
 
 ### Non-functional requirements
 
-9 of 26 requirements are met, 7 are partially met, 10 are not met yet (5 of them belong to the frontend that
-does not exist yet, the others need the database and the production environment).
+11 of 26 requirements are met, 7 are partially met, 8 are not met yet (5 of them belong to the frontend that
+does not exist yet, the others need the production environment).
 
 | Requirement | Status | Evidence or reason |
 |-------------|--------|--------------------|
 | **4.1 Performance** | | |
 | Server response time (95% within 500 ms) | Partial | `NonFunctionalRequirementsTest`: the 95th percentile of catalog, search and cart requests is below 500 ms on 5,000 products. A load of 1,000 concurrent users was not tested |
 | Page load time | Not met | No frontend yet |
-| Search speed (1 s for 100,000 products) | Partial | The in-memory search answers in milliseconds on 5,000 products; 100,000 products need the PostgreSQL full-text search |
+| Search speed (1 s for 100,000 products) | Partial | Search answers within the limit on 5,000 products (the size of the store catalog), but products are filtered and sorted in the application after loading; 100,000 products need filtering in SQL or full-text search |
 | Peak order throughput (50 orders per minute) | Partial | 20 simultaneous checkouts are processed in less than a second in the test; a long load test was not done |
 | **4.2 Scalability** | | |
-| Adding servers | Not met | Data is kept in the memory of one instance; after the move to PostgreSQL the container is stateless and can be multiplied |
-| Data volume | Not met | Needs the database |
+| Adding servers | Partial | The application is stateless: no session (JWT), all data in PostgreSQL and Redis, order numbers from a database sequence, row locks instead of in-process locks. Running several instances behind a load balancer was not tested |
+| Data volume | Partial | Data is stored in PostgreSQL with indexes on the lookup columns. The catalog search and the order list of managers still filter in the application, which does not fit 100,000 products and 1,000,000 orders |
 | **4.3 Reliability and availability** | | |
-| Availability 99.5% | Partial | Health check `/actuator/health`, Docker `HEALTHCHECK`, `restart: unless-stopped`, graceful shutdown. There is no production hosting to measure |
-| Backups and recovery | Not met | No database yet |
-| Order and payment integrity | Met | Idempotency key at checkout, processed webhook events are remembered, stock reservation is atomic: `CheckoutServiceTest`, `PaymentServiceTest`, `SystemIntegrationTest`, `NonFunctionalRequirementsTest` |
+| Availability 99.5% | Partial | Health check `/actuator/health` covers the application, PostgreSQL and Redis; Docker `HEALTHCHECK`, `restart: unless-stopped`, graceful shutdown. There is no production hosting to measure |
+| Backups and recovery | Not met | The data is kept in a Docker volume and survives restarts, but there is no automatic backup |
+| Order and payment integrity | Met | Idempotency key with a unique constraint, processed webhook events are remembered, checkout is one transaction, stock rows are locked while reserved: `CheckoutServiceTest`, `PaymentServiceTest`, `SystemIntegrationTest`, `NonFunctionalRequirementsTest` |
 | **4.4 Security** | | |
 | Encrypted traffic | Not met | The application serves HTTP; TLS is terminated by the Application Load Balancer in the deployment architecture of Lab 2 |
 | Password storage | Met | PBKDF2-HMAC-SHA256 with a random salt and 100,000 iterations (`Pbkdf2PasswordHasher`); passwords and hashes are never returned or logged |
 | No card data stored | Met | Only the payment session id of the provider is stored |
-| Role-based access control | Partial | Every management and administration endpoint checks the role on the server, customers see only their own orders, blocked users are rejected. The caller is identified by the `X-User-Id` header, so real authentication (JWT) is still required |
-| Protection from attacks | Partial | Request validation, no SQL, errors never expose internals, account lock after failed logins. The limit of 20 requests per minute per IP is not implemented |
-| Secrets management | Met | No secrets in the repository; `.env` and local properties are in `.gitignore`. Demo accounts are switched off with `shopsphere.demo-data.enabled=false` |
+| Role-based access control | Met | Spring Security validates the JWT of every request and checks the role by URL; customers see only their own orders; a blocked account and a changed role take effect at once: `AuthenticationApiTest` |
+| Protection from attacks | Met | Request validation, parameterized queries through JPA (SQL injection), errors never expose internals, account lock after 5 failed logins, 20 login and registration requests per minute per IP address (Redis). XSS protection belongs to the frontend |
+| Secrets management | Met | The JWT signing key and the database password come from environment variables (`.env` is in `.gitignore`, `.env.example` shows the names); the repository has only local development defaults. Demo accounts are switched off with `shopsphere.demo-data.enabled=false` |
 | **4.5 Usability and accessibility** | | |
 | Ease of ordering, WCAG 2.1 AA, Responsive design, Browser support | Not met (4) | These requirements belong to the storefront, which is not implemented; the API is used through Swagger UI and Postman |
 | **4.6 User interface** | | |
@@ -455,7 +514,7 @@ does not exist yet, the others need the database and the production environment)
 | Price and date format | Partial | Prices are in UAH with two decimal places; dates are sent in ISO 8601, the DD.MM.YYYY format is the task of the frontend |
 | Clear error messages | Met | Validation errors list every field with a plain message (`fieldErrors`); all errors have one format |
 | **4.7 Maintainability** | | |
-| Test coverage 70% | Met | About 95% of lines; `./gradlew build` fails below 70% (`jacocoTestCoverageVerification`) |
+| Test coverage 70% | Met | About 94% of lines; `./gradlew build` fails below 70% (`jacocoTestCoverageVerification`) |
 | CI and code review | Met | GitHub Actions builds and tests every pull request; a pull request is merged by the other team member |
 | API documentation | Met | OpenAPI 3 document `/v3/api-docs` and Swagger UI, generated by springdoc from the code |
 | Logging and monitoring | Met | Application log (including sent emails), health check endpoint used by Docker and CI |
@@ -469,7 +528,7 @@ does not exist yet, the others need the database and the production environment)
 
 Module ownership follows the work distribution of Laboratory Work 3 (Jira project SHOP, Table 6).
 
-Contribution in Lab 5:
+Contribution in Lab 5 (integration):
 
 | Member | Work |
 |--------|------|
@@ -525,15 +584,23 @@ Branches of Lab 5 (one feature and one developer per branch, in merge order):
 | `feature/docker-and-ci` | Maksym | Ivan | Dockerfile, Docker Compose, GitHub Actions workflow |
 | `feature/integration-testing` | Ivan | Maksym | System integration tests, non-functional checks, Postman collection, requirements fulfillment |
 
+Branches of the move to real storage and security (after Lab 5, in merge order):
+
+| Branch | Author | Reviewer | Result |
+|--------|--------|----------|--------|
+| `feature/postgres-persistence` | Maksym | Ivan | PostgreSQL, Liquibase, JPA for catalog, stock, promo codes, orders and payments; transactions and row locks; Testcontainers; PostgreSQL in Docker Compose and CI |
+| `feature/postgres-accounts` | Ivan | Maksym | Users, password reset tokens, reviews, audit log and store settings in PostgreSQL |
+| `feature/postgres-carts` | Maksym | Ivan | Carts in PostgreSQL, removal of abandoned guest carts |
+| `feature/jwt-security` | Ivan | Maksym | Spring Security, JWT access and refresh tokens, logout, login rate limit, Redis, Postman collection with tokens |
+
 ## Roadmap
 
 Next items of the product backlog (Laboratory Work 3); they close the requirements that are partial or not
 implemented in the [Requirements fulfillment](#requirements-fulfillment) tables:
 
-- PostgreSQL 17 with Flyway migrations and a schema per module instead of in-memory repositories (SHOP-16):
-  data volume, backups, several application instances
-- JWT authentication with Spring Security instead of the `X-User-Id` header, request rate limit (SHOP-17)
+- Catalog search, filters and pagination in SQL (PostgreSQL full-text search) instead of filtering in the application
 - Stripe Checkout Sessions adapter with webhook signature verification instead of `SimulatedPaymentProvider` (SHOP-39)
 - Transactional outbox for domain events and the SMTP email adapter (SHOP-42, SHOP-43)
 - React 19 single-page application: Storefront and Management Panel (SHOP-22)
 - Email confirmation, profile and address book, product images and attributes, wishlist, report export
+- Production environment: HTTPS on the load balancer, database backups, several application instances
