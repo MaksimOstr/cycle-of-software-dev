@@ -16,9 +16,11 @@ import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import com.cycleofsoftwaredev.shared.domain.NotFoundException;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class CartService implements CartApi {
+
+    public static final Duration GUEST_CART_LIFETIME = Duration.ofDays(30);
 
     private final CartRepository carts;
     private final PromoCodeRepository promoCodes;
@@ -43,7 +47,7 @@ public class CartService implements CartApi {
     }
 
     public CartSnapshot createCart(UUID customerId) {
-        Cart cart = carts.save(new Cart(UUID.randomUUID(), customerId));
+        Cart cart = save(new Cart(UUID.randomUUID(), customerId));
         return snapshot(cart);
     }
 
@@ -68,7 +72,7 @@ public class CartService implements CartApi {
         PromoCode promoCode = usablePromoCode(code)
                 .orElseThrow(() -> new BusinessRuleException("Promo code " + code + " is invalid or expired"));
         cart.applyPromoCode(promoCode.code());
-        return snapshot(carts.save(cart));
+        return snapshot(save(cart));
     }
 
     public CartSnapshot getSnapshot(UUID cartId) {
@@ -88,7 +92,7 @@ public class CartService implements CartApi {
             promoCodes.save(promoCode);
         });
         cart.clear();
-        carts.save(cart);
+        save(cart);
     }
 
     private CartSnapshot changeQuantity(Cart cart, UUID variantId, int quantity) {
@@ -102,7 +106,7 @@ public class CartService implements CartApi {
             }
         }
         cart.setQuantity(variantId, quantity);
-        return snapshot(carts.save(cart));
+        return snapshot(save(cart));
     }
 
     private CartSnapshot snapshot(Cart cart) {
@@ -123,6 +127,20 @@ public class CartService implements CartApi {
 
     private Optional<PromoCode> usablePromoCode(String code) {
         return promoCodes.findByCode(PromoCode.normalize(code)).filter(promo -> promo.isUsable(clock.instant()));
+    }
+
+    /**
+     * Requirement "Add to cart": the cart of a guest is stored for 30 days after its last change.
+     * Carts of registered customers are kept until the customer empties them or places the order.
+     */
+    @Scheduled(cron = "${shopsphere.cart.cleanup-cron:0 0 4 * * *}")
+    public int removeAbandonedGuestCarts() {
+        return carts.deleteGuestCartsNotChangedSince(clock.instant().minus(GUEST_CART_LIFETIME));
+    }
+
+    private Cart save(Cart cart) {
+        cart.touch(clock.instant());
+        return carts.save(cart);
     }
 
     private Cart getCart(UUID cartId) {

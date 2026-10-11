@@ -1,9 +1,11 @@
 package com.cycleofsoftwaredev.cart.domain;
 
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 import java.util.UUID;
 
 /** A variant in the cart. The price is not stored: it is always taken from the catalog. */
+@Embeddable
 public record CartItem(UUID variantId, int quantity) {
 
     public static final int MAX_QUANTITY = 99;
