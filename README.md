@@ -195,6 +195,18 @@ After that the application was moved from in-memory storage to real infrastructu
                        # coverage report: build/reports/jacoco/test/html/index.html
 ```
 
+The tests are divided into three levels (Laboratory Work 6); each level has its own Gradle task and its own
+report in `build/reports/tests/<task>/index.html`:
+
+```bash
+./gradlew unitTest       # unit tests: business rules without Spring and without Docker, a few seconds
+./gradlew componentTest  # component tests: a part of the application with the real PostgreSQL and Redis, the REST API
+./gradlew systemTest     # system tests: user scenarios and non-functional checks on the whole application
+```
+
+A test class without a tag is a unit test; component and system tests are marked with `@Tag("component")` and
+`@Tag("system")`.
+
 ### Dependency management
 
 All dependencies are declared in one file, [`build.gradle`](build.gradle); the Gradle wrapper downloads them, so
@@ -401,6 +413,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | Test | What it checks |
 |------|----------------|
 | `MoneyTest`, `OrderTest` | Value object arithmetic; every transition of the order state machine (Lab 2, Figure 8) |
+| `CartTest`, `PromoCodeTest`, `StockItemTest`, `ProductTest`, `OrderDetailsTest`, `PaymentTest` | Rules of the domain objects: quantity limits of a cart, discount rounding and limits of a promo code, stock arithmetic and the low-stock threshold, product and variant data, contacts and delivery of an order, payment statuses |
 | `RegistrationServiceTest`, `AccountSecurityTest`, `UserManagementServiceTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
 | `CheckoutServiceTest`, `OrderServiceTest` | Checkout and payment scenarios of Lab 2, Figures 6 and 7: idempotency, stock reservation, unpaid order expiry, late payment refund, cancellation, return |
 | `OrderListTest` | Filters and search of the manager's order list |
@@ -600,6 +613,12 @@ Branches of the move to real storage and security (after Lab 5, in merge order):
 | `feature/jwt-security` | Ivan | Maksym | Spring Security, JWT access and refresh tokens, logout, login rate limit, Redis, Postman collection with tokens |
 | `feature/sql-search` | Maksym | Ivan | Catalog search, order list and sales statistics as SQL queries with paging; stock of a page in one query |
 | `feature/sql-admin-queries` | Ivan | Maksym | User search and the newest records of the audit log as SQL queries with a limit |
+
+Branches of Lab 6 (testing and validation, in merge order):
+
+| Branch | Author | Reviewer | Result |
+|--------|--------|----------|--------|
+| `feature/domain-unit-tests` | Maksym | Ivan | Test levels as Gradle tasks; unit tests of the domain rules of cart, stock, catalog, orders and payments; fixes of the three defects they found |
 
 ## Roadmap
 
