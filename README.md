@@ -259,12 +259,14 @@ docker compose down -v            # stop and delete the data
 | Database URL | `SHOPSPHERE_DB_URL` | `jdbc:postgresql://localhost:5432/shopsphere` |
 | Database user and password | `SHOPSPHERE_DB_USER`, `SHOPSPHERE_DB_PASSWORD` | `shopsphere` / `shopsphere` (local development only) |
 | Redis host and port | `SHOPSPHERE_REDIS_HOST`, `SHOPSPHERE_REDIS_PORT` | `localhost`, `6379` |
-| Signing key of the access tokens (at least 32 characters) | `SHOPSPHERE_JWT_SECRET` | empty: a random key is generated at every start, so tokens stop working after a restart |
+| Signing key of the access tokens (at least 32 characters) | `SHOPSPHERE_JWT_SECRET` | a development placeholder from `application.properties`: the application starts without setup and tokens stay valid after a restart |
 | Ports published by Docker Compose | `SHOPSPHERE_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | `8080`, `5432`, `6379` |
 | Password of the PostgreSQL container | `POSTGRES_PASSWORD` | `shopsphere` |
 
-Secrets are never written into the repository: for Docker Compose copy [`.env.example`](.env.example) to `.env`
-(the file is in `.gitignore`) and set `POSTGRES_PASSWORD` and `SHOPSPHERE_JWT_SECRET` there.
+The defaults (database password `shopsphere`, the placeholder JWT key) are meant only for a local run and a
+demo; the application writes a warning to the log while the placeholder key is used. Real values are never
+written into the repository: for Docker Compose copy [`.env.example`](.env.example) to `.env` (the file is in
+`.gitignore`) and set `POSTGRES_PASSWORD` and `SHOPSPHERE_JWT_SECRET` there.
 
 At startup Liquibase applies the changes from [`src/main/resources/db/changelog`](src/main/resources/db/changelog)
 that are not in the database yet, and Hibernate checks that the entities match the schema
@@ -483,7 +485,7 @@ the code has ports (interfaces) for them and simulated implementations.
 
 ### Non-functional requirements
 
-11 of 26 requirements are met, 7 are partially met, 8 are not met yet (5 of them belong to the frontend that
+10 of 26 requirements are met, 8 are partially met, 8 are not met yet (5 of them belong to the frontend that
 does not exist yet, the others need the production environment).
 
 | Requirement | Status | Evidence or reason |
@@ -506,7 +508,7 @@ does not exist yet, the others need the production environment).
 | No card data stored | Met | Only the payment session id of the provider is stored |
 | Role-based access control | Met | Spring Security validates the JWT of every request and checks the role by URL; customers see only their own orders; a blocked account and a changed role take effect at once: `AuthenticationApiTest` |
 | Protection from attacks | Met | Request validation, parameterized queries through JPA (SQL injection), errors never expose internals, account lock after 5 failed logins, 20 login and registration requests per minute per IP address (Redis). XSS protection belongs to the frontend |
-| Secrets management | Met | The JWT signing key and the database password come from environment variables (`.env` is in `.gitignore`, `.env.example` shows the names); the repository has only local development defaults. Demo accounts are switched off with `shopsphere.demo-data.enabled=false` |
+| Secrets management | Partial | The JWT signing key and the database password are read from environment variables (`.env` is in `.gitignore`, `.env.example` shows the names). For a run without setup the repository contains development placeholders for both, and the application warns in the log while the placeholder key is used; a secrets store is not connected. Demo accounts are switched off with `shopsphere.demo-data.enabled=false` |
 | **4.5 Usability and accessibility** | | |
 | Ease of ordering, WCAG 2.1 AA, Responsive design, Browser support | Not met (4) | These requirements belong to the storefront, which is not implemented; the API is used through Swagger UI and Postman |
 | **4.6 User interface** | | |

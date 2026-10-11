@@ -90,7 +90,7 @@ public class ManagementCatalogController {
 
     @PutMapping("/categories/{categoryId}")
     public CategoryResponse renameCategory(@PathVariable UUID categoryId,
-                                   @Valid @RequestBody CategoryNameRequest request) {
+                                           @Valid @RequestBody CategoryNameRequest request) {
         currentUser.requireStaff();
         return CategoryResponse.of(categories.renameCategory(categoryId, request.name()));
     }
@@ -111,8 +111,7 @@ public class ManagementCatalogController {
 
     @PostMapping("/products")
     @ResponseStatus(HttpStatus.CREATED)
-    public ProductResponse createProduct(
-            @Valid @RequestBody ProductRequest request) {
+    public ProductResponse createProduct(@Valid @RequestBody ProductRequest request) {
         currentUser.requireStaff();
         return assembler.toResponse(products.createProduct(request.name(), request.description(), request.categoryId()));
     }

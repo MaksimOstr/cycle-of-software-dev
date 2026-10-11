@@ -52,8 +52,8 @@ services:
       SHOPSPHERE_DB_USER: shopsphere
       SHOPSPHERE_DB_PASSWORD: ${POSTGRES_PASSWORD:-shopsphere}
       SHOPSPHERE_REDIS_HOST: redis
-      # signing key of the access tokens; without it a random key is generated at every start
-      SHOPSPHERE_JWT_SECRET: ${SHOPSPHERE_JWT_SECRET:-}
+      # signing key of the access tokens: a development placeholder unless SHOPSPHERE_JWT_SECRET is set in .env
+      SHOPSPHERE_JWT_SECRET: ${SHOPSPHERE_JWT_SECRET:-shopsphere-local-development-jwt-secret-change-me}
       # demo users, catalog and stock are loaded at startup
       SHOPSPHERE_DEMO_DATA_ENABLED: "true"
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"

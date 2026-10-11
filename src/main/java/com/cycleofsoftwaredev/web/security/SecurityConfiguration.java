@@ -4,7 +4,6 @@ import com.cycleofsoftwaredev.web.ForbiddenException;
 import com.cycleofsoftwaredev.web.UnauthorizedException;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -41,6 +40,8 @@ public class SecurityConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SecurityConfiguration.class);
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final int MIN_SECRET_BYTES = 32;
+    /** Placeholder key of application.properties: enough for a local run and a demo, never for production. */
+    private static final String DEVELOPMENT_SECRET = "shopsphere-local-development-jwt-secret-change-me";
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationEntryPoint entryPoint,
@@ -93,17 +94,14 @@ public class SecurityConfiguration {
 
     @Bean
     SecretKey jwtSigningKey(JwtProperties properties) {
-        String secret = properties.secret();
-        if (secret == null || secret.isBlank()) {
-            log.warn("SHOPSPHERE_JWT_SECRET is not set: a random signing key is used, "
-                    + "issued tokens will stop working after a restart");
-            byte[] random = new byte[MIN_SECRET_BYTES];
-            new SecureRandom().nextBytes(random);
-            return new SecretKeySpec(random, HMAC_SHA256);
-        }
+        String secret = properties.secret() == null ? "" : properties.secret();
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < MIN_SECRET_BYTES) {
             throw new IllegalStateException("shopsphere.jwt.secret must contain at least " + MIN_SECRET_BYTES + " bytes");
+        }
+        if (DEVELOPMENT_SECRET.equals(secret)) {
+            log.warn("The development JWT signing key from application.properties is used. "
+                    + "Set SHOPSPHERE_JWT_SECRET before the application is opened to real users");
         }
         return new SecretKeySpec(bytes, HMAC_SHA256);
     }
