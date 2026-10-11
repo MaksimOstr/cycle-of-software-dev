@@ -47,6 +47,10 @@ public class CurrentUserResolver {
         if (userId == null) {
             throw new UnauthorizedException("Authentication is required");
         }
-        return identity.findUser(userId).orElseThrow(() -> new UnauthorizedException("Unknown user"));
+        UserView user = identity.findUser(userId).orElseThrow(() -> new UnauthorizedException("Unknown user"));
+        if (user.blocked()) {
+            throw new ForbiddenException("The account is blocked");
+        }
+        return user;
     }
 }

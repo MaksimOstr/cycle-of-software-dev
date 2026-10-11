@@ -2,6 +2,7 @@ package com.cycleofsoftwaredev.identity.infrastructure;
 
 import com.cycleofsoftwaredev.identity.domain.User;
 import com.cycleofsoftwaredev.identity.domain.UserRepository;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,5 +29,10 @@ public class InMemoryUserRepository implements UserRepository {
     @Override
     public Optional<User> findByEmail(String normalizedEmail) {
         return users.values().stream().filter(user -> user.email().equals(normalizedEmail)).findFirst();
+    }
+
+    @Override
+    public List<User> findAll() {
+        return List.copyOf(users.values());
     }
 }

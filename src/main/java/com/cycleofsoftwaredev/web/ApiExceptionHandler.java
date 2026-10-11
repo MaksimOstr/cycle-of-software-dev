@@ -1,5 +1,6 @@
 package com.cycleofsoftwaredev.web;
 
+import com.cycleofsoftwaredev.identity.application.AccountBlockedException;
 import com.cycleofsoftwaredev.identity.application.AccountLockedException;
 import com.cycleofsoftwaredev.identity.application.AuthenticationException;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
@@ -98,6 +99,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AccountLockedException.class)
     ResponseEntity<ErrorResponse> accountLocked(AccountLockedException e) {
         return error(HttpStatus.LOCKED, "ACCOUNT_LOCKED", e.getMessage());
+    }
+
+    @ExceptionHandler(AccountBlockedException.class)
+    ResponseEntity<ErrorResponse> accountBlocked(AccountBlockedException e) {
+        return error(HttpStatus.FORBIDDEN, "ACCOUNT_BLOCKED", e.getMessage());
     }
 
     @ExceptionHandler(ForbiddenException.class)

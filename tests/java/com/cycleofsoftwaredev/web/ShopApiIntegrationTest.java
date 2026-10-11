@@ -282,6 +282,47 @@ class ShopApiIntegrationTest {
     }
 
     @Test
+    void administratorManagesUsers() throws Exception {
+        UserView admin = registration.createUser(
+                new RegisterUserCommand("admin" + System.nanoTime() + "@example.com", "Admin", "Admin12345"), Role.ADMINISTRATOR);
+        String login = "{\"email\":\"" + customer.email() + "\",\"password\":\"Customer123\"}";
+
+        mvc.perform(get("/api/v1/admin/users").header(USER, manager.id())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/users").param("query", customer.email()).header(USER, admin.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(customer.id().toString()))
+                .andExpect(jsonPath("$[0].blocked").value(false));
+
+        // a blocked user can neither log in nor use the API
+        mvc.perform(post("/api/v1/admin/users/" + customer.id() + "/block").header(USER, admin.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocked").value(true));
+        mvc.perform(json(post("/api/v1/auth/login"), login))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_BLOCKED"));
+        mvc.perform(get("/api/v1/me/orders").header(USER, customer.id())).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/admin/users/" + customer.id() + "/unblock").header(USER, admin.id()))
+                .andExpect(status().isOk());
+        mvc.perform(json(post("/api/v1/auth/login"), login)).andExpect(status().isOk());
+
+        // the customer becomes a manager and gets access to the management panel
+        mvc.perform(get("/api/v1/management/products").header(USER, customer.id())).andExpect(status().isForbidden());
+        mvc.perform(json(put("/api/v1/admin/users/" + customer.id() + "/role"), "{\"role\":\"MANAGER\"}").header(USER, admin.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("MANAGER"));
+        mvc.perform(get("/api/v1/management/products").header(USER, customer.id())).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/users/" + customer.id()).header(USER, admin.id()))
+                .andExpect(jsonPath("$.role").value("MANAGER"));
+
+        mvc.perform(post("/api/v1/admin/users/" + admin.id() + "/block").header(USER, admin.id()))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/v1/admin/audit-log").header(USER, admin.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.eventType == 'UserAccountChanged')]").isNotEmpty());
+    }
+
+    @Test
     void forgottenPasswordIsResetWithTheCodeFromEmail() throws Exception {
         String email = customer.email();
         mvc.perform(json(post("/api/v1/auth/password-reset"), "{\"email\":\"unknown@example.com\"}"))

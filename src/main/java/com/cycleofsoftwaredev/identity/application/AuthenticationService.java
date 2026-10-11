@@ -44,6 +44,9 @@ public class AuthenticationService {
         }
         user.loginSucceeded();
         users.save(user);
+        if (user.isBlocked()) {
+            throw new AccountBlockedException();
+        }
         return user.toView();
     }
 }
