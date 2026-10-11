@@ -1,13 +1,14 @@
 package com.cycleofsoftwaredev.ordering;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cycleofsoftwaredev.delivery.api.DeliveryMethod;
 import com.cycleofsoftwaredev.ordering.api.OrderStatus;
-import com.cycleofsoftwaredev.ordering.application.OrderFilter;
 import com.cycleofsoftwaredev.ordering.application.PlaceOrderCommand;
 import com.cycleofsoftwaredev.ordering.domain.ContactInfo;
 import com.cycleofsoftwaredev.ordering.domain.Order;
+import com.cycleofsoftwaredev.ordering.domain.OrderFilter;
 import com.cycleofsoftwaredev.ordering.domain.PaymentMethod;
 import com.cycleofsoftwaredev.shared.domain.Actor;
 import com.cycleofsoftwaredev.support.ShopFixture;
@@ -56,6 +57,18 @@ class OrderListTest {
     }
 
     @Test
+    void returnsOnlyTheRequestedPage() {
+        assertThat(shop.orderQueries.findOrders(OrderFilter.all(), 1, 2)).extracting(Order::number)
+                .containsExactly(pickupOrder, cashOrder);
+        assertThat(shop.orderQueries.findOrders(OrderFilter.all(), 2, 2)).extracting(Order::number)
+                .containsExactly(cardOrder);
+        assertThatThrownBy(() -> shop.orderQueries.findOrders(OrderFilter.all(), 0, 2))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> shop.orderQueries.findOrders(OrderFilter.all(), 1, 1000))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void filtersByDateRange() {
         assertThat(numbers(new OrderFilter(null, null, null, secondDay, null, null))).containsExactly(pickupOrder);
         assertThat(numbers(new OrderFilter(null, null, null, null, secondDay, null))).containsExactly(cashOrder, cardOrder);
@@ -78,7 +91,7 @@ class OrderListTest {
     }
 
     private List<String> numbers(OrderFilter filter) {
-        return shop.orderQueries.findOrders(filter).stream().map(Order::number).toList();
+        return shop.orderQueries.findOrders(filter, 1, 50).stream().map(Order::number).toList();
     }
 
     private static OrderFilter filter(OrderStatus status, PaymentMethod payment, DeliveryMethod delivery) {

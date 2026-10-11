@@ -1,7 +1,9 @@
 package com.cycleofsoftwaredev.inventory.api;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -11,6 +13,9 @@ import java.util.UUID;
 public interface InventoryApi {
 
     int availableQuantity(UUID variantId);
+
+    /** Available quantity of several variants at once; a variant without a stock record has 0. */
+    Map<UUID, Integer> availableQuantities(Collection<UUID> variantIds);
 
     /** Reserves all lines of an order or none of them; throws {@link OutOfStockException}. */
     void reserve(UUID orderId, List<StockLine> lines, Instant expiresAt);

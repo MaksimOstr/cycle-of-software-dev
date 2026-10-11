@@ -44,12 +44,10 @@ public class CategoryService {
     /** A category that contains products or subcategories cannot be deleted. */
     public void deleteCategory(UUID id) {
         getCategory(id);
-        boolean hasSubcategories = categories.findAll().stream().anyMatch(category -> id.equals(category.parentId()));
-        if (hasSubcategories) {
+        if (categories.existsByParentId(id)) {
             throw new BusinessRuleException("The category has subcategories and cannot be deleted");
         }
-        boolean hasProducts = products.findAll().stream().anyMatch(product -> product.categoryId().equals(id));
-        if (hasProducts) {
+        if (products.existsByCategoryId(id)) {
             throw new BusinessRuleException("The category contains products and cannot be deleted");
         }
         categories.deleteById(id);

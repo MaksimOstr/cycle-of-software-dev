@@ -10,7 +10,9 @@ import com.cycleofsoftwaredev.inventory.domain.StockRepository;
 import com.cycleofsoftwaredev.inventory.domain.StockReservation;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +52,17 @@ public class InventoryService implements InventoryApi {
     @Transactional(readOnly = true)
     public int availableQuantity(UUID variantId) {
         return stock.findAvailableQuantity(variantId).orElse(0);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, Integer> availableQuantities(Collection<UUID> variantIds) {
+        Map<UUID, Integer> available = new HashMap<>();
+        variantIds.forEach(variantId -> available.put(variantId, 0));
+        if (!variantIds.isEmpty()) {
+            stock.findByVariantIdIn(variantIds).forEach(item -> available.put(item.variantId(), item.available()));
+        }
+        return available;
     }
 
     @Override

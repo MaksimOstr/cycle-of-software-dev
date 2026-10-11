@@ -1,6 +1,5 @@
-package com.cycleofsoftwaredev.catalog.application;
+package com.cycleofsoftwaredev.catalog.domain;
 
-import com.cycleofsoftwaredev.catalog.domain.Product;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import java.util.Comparator;
 
@@ -17,6 +16,7 @@ public enum ProductSort {
         this.comparator = comparator;
     }
 
+    /** The same order in Java; the storefront gets it from the database (see ProductSearch). */
     public Comparator<Product> comparator() {
         // products with equal keys keep a stable order between pages
         return comparator.thenComparing(Product::name).thenComparing(Product::id);

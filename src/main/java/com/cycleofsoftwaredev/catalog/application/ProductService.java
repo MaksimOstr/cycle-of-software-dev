@@ -4,10 +4,13 @@ import com.cycleofsoftwaredev.catalog.api.CatalogApi;
 import com.cycleofsoftwaredev.catalog.api.VariantView;
 import com.cycleofsoftwaredev.catalog.domain.Product;
 import com.cycleofsoftwaredev.catalog.domain.ProductRepository;
+import com.cycleofsoftwaredev.catalog.domain.ProductSearch;
+import com.cycleofsoftwaredev.catalog.domain.ProductSort;
 import com.cycleofsoftwaredev.catalog.domain.ProductVariant;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import com.cycleofsoftwaredev.shared.domain.NotFoundException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -20,10 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductService implements CatalogApi {
 
     private final ProductRepository products;
+    private final ProductSearch productSearch;
     private final CategoryService categories;
 
-    public ProductService(ProductRepository products, CategoryService categories) {
+    public ProductService(ProductRepository products, ProductSearch productSearch, CategoryService categories) {
         this.products = products;
+        this.productSearch = productSearch;
         this.categories = categories;
     }
 
@@ -77,23 +82,16 @@ public class ProductService implements CatalogApi {
         return products.findAll().stream().sorted(ProductSort.NAME.comparator()).toList();
     }
 
-    /** Active products that match the text query and, if given, belong to the category or its subcategories. */
-    public List<Product> search(String query, UUID categoryId) {
-        return search(query, categoryId, ProductSort.NAME);
-    }
-
-    public List<Product> search(String query, UUID categoryId, ProductSort sort) {
-        Set<UUID> branch = categoryId == null ? null : categories.branchIds(categoryId);
-        return products.findAll().stream()
-                .filter(Product::isActive)
-                .filter(product -> branch == null || branch.contains(product.categoryId()))
-                .filter(product -> product.matches(query))
-                .sorted(sort.comparator())
-                .toList();
-    }
-
+    /**
+     * One page of the visible products that match the text query and, if a category is given, belong to it
+     * or to its subcategories. The storage filters, sorts and cuts the page; only its products are loaded.
+     */
     public ProductPage searchPage(String query, UUID categoryId, ProductSort sort, int page, int size) {
-        return ProductPage.of(search(query, categoryId, sort), page, size);
+        int offset = ProductPage.offsetOf(page, size);
+        String text = query == null || query.isBlank() ? null : query.trim().toLowerCase(Locale.ROOT);
+        Set<UUID> branch = categoryId == null ? null : categories.branchIds(categoryId);
+        List<Product> items = productSearch.find(text, branch, sort, offset, size);
+        return new ProductPage(items, page, size, productSearch.count(text, branch));
     }
 
     @Override
