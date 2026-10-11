@@ -29,6 +29,7 @@ public class User {
     private Role role;
     private int failedLogins;
     private Instant lockedUntil;
+    private boolean blocked;
 
     public User(UUID id, String email, String fullName, String passwordHash, Role role, Instant registeredAt) {
         this.id = Objects.requireNonNull(id);
@@ -83,8 +84,21 @@ public class User {
         lockedUntil = null;
     }
 
+    /** Requirement "User management": a blocked user cannot log in or call the API until unblocked. */
+    public void block() {
+        this.blocked = true;
+    }
+
+    public void unblock() {
+        this.blocked = false;
+    }
+
+    public boolean isBlocked() {
+        return blocked;
+    }
+
     public UserView toView() {
-        return new UserView(id, email, fullName, role);
+        return new UserView(id, email, fullName, role, blocked);
     }
 
     public UUID id() {
