@@ -3,7 +3,7 @@ package com.cycleofsoftwaredev.web;
 import com.cycleofsoftwaredev.catalog.application.CategoryService;
 import com.cycleofsoftwaredev.catalog.application.ProductPage;
 import com.cycleofsoftwaredev.catalog.application.ProductService;
-import com.cycleofsoftwaredev.catalog.application.ProductSort;
+import com.cycleofsoftwaredev.catalog.domain.ProductSort;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,7 +43,7 @@ public class CatalogController {
                                         @RequestParam(defaultValue = "1") int page,
                                         @RequestParam(defaultValue = "" + ProductPage.DEFAULT_SIZE) int size) {
         ProductPage result = products.searchPage(query, categoryId, sort, page, size);
-        return new ProductPageResponse(result.items().stream().map(assembler::toResponse).toList(),
+        return new ProductPageResponse(assembler.toResponses(result.items()),
                 result.page(), result.size(), result.totalItems(), result.totalPages());
     }
 

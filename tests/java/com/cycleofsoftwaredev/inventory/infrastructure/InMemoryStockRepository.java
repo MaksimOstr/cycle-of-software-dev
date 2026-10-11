@@ -2,7 +2,10 @@ package com.cycleofsoftwaredev.inventory.infrastructure;
 
 import com.cycleofsoftwaredev.inventory.domain.StockItem;
 import com.cycleofsoftwaredev.inventory.domain.StockRepository;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +30,11 @@ public class InMemoryStockRepository implements StockRepository {
     @Override
     public Optional<StockItem> lockByVariantId(UUID variantId) {
         return findByVariantId(variantId);
+    }
+
+    @Override
+    public List<StockItem> findByVariantIdIn(Collection<UUID> variantIds) {
+        return variantIds.stream().map(items::get).filter(Objects::nonNull).toList();
     }
 
     @Override

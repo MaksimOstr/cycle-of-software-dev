@@ -7,15 +7,17 @@ import com.cycleofsoftwaredev.catalog.api.VariantView;
 import com.cycleofsoftwaredev.catalog.application.CategoryService;
 import com.cycleofsoftwaredev.catalog.application.ProductPage;
 import com.cycleofsoftwaredev.catalog.application.ProductService;
-import com.cycleofsoftwaredev.catalog.application.ProductSort;
 import com.cycleofsoftwaredev.catalog.domain.Category;
 import com.cycleofsoftwaredev.catalog.domain.Product;
+import com.cycleofsoftwaredev.catalog.domain.ProductSort;
 import com.cycleofsoftwaredev.catalog.domain.ProductVariant;
 import com.cycleofsoftwaredev.catalog.infrastructure.InMemoryCategoryRepository;
 import com.cycleofsoftwaredev.catalog.infrastructure.InMemoryProductRepository;
+import com.cycleofsoftwaredev.catalog.infrastructure.InMemoryProductSearch;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import com.cycleofsoftwaredev.shared.domain.NotFoundException;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +25,8 @@ class ProductServiceTest {
 
     private final InMemoryProductRepository productRepository = new InMemoryProductRepository();
     private final CategoryService categories = new CategoryService(new InMemoryCategoryRepository(), productRepository);
-    private final ProductService products = new ProductService(productRepository, categories);
+    private final ProductService products =
+            new ProductService(productRepository, new InMemoryProductSearch(productRepository), categories);
 
     @Test
     void createsProductWithVariantsAndExposesThemThroughCatalogApi() {
@@ -46,9 +49,9 @@ class ProductServiceTest {
         products.createProduct("Galaxy S30", "Flagship phone", phones.id());
         products.createProduct("Basic Hoodie", "Cotton hoodie", clothing.id());
 
-        assertThat(products.search("galaxy", null)).extracting(Product::name).containsExactly("Galaxy S30");
-        assertThat(products.search(null, clothing.id())).extracting(Product::name).containsExactly("Basic Hoodie");
-        assertThat(products.search("", null)).hasSize(2);
+        assertThat(search("galaxy", null)).extracting(Product::name).containsExactly("Galaxy S30");
+        assertThat(search(null, clothing.id())).extracting(Product::name).containsExactly("Basic Hoodie");
+        assertThat(search("", null)).hasSize(2);
     }
 
     @Test
@@ -73,8 +76,8 @@ class ProductServiceTest {
         products.createProduct("Kettle", "", kitchen.id());
         products.createProduct("Robot", "", toys.id());
 
-        assertThat(products.search(null, home.id())).extracting(Product::name).containsExactly("Frying pan", "Kettle");
-        assertThat(products.search(null, cookware.id())).extracting(Product::name).containsExactly("Frying pan");
+        assertThat(search(null, home.id())).extracting(Product::name).containsExactly("Frying pan", "Kettle");
+        assertThat(search(null, cookware.id())).extracting(Product::name).containsExactly("Frying pan");
     }
 
     @Test
@@ -96,9 +99,9 @@ class ProductServiceTest {
         product("Cup", category, "120");
         products.createProduct("Draft without variants", "", category.id());
 
-        assertThat(products.search(null, null, ProductSort.PRICE_ASC)).extracting(Product::name)
+        assertThat(search(null, null, ProductSort.PRICE_ASC)).extracting(Product::name)
                 .containsExactly("Cup", "Kettle", "Blender", "Draft without variants");
-        assertThat(products.search(null, null, ProductSort.PRICE_DESC)).extracting(Product::name)
+        assertThat(search(null, null, ProductSort.PRICE_DESC)).extracting(Product::name)
                 .containsExactly("Blender", "Kettle", "Cup", "Draft without variants");
 
         ProductPage secondPage = products.searchPage(null, null, ProductSort.NAME, 2, 3);
@@ -135,7 +138,7 @@ class ProductServiceTest {
 
         products.setVisible(product.id(), false);
 
-        assertThat(products.search(null, null)).isEmpty();
+        assertThat(search(null, null)).isEmpty();
         assertThat(products.allProducts()).extracting(Product::name).containsExactly("Kettle");
         assertThat(products.findVariant(variant.id()).orElseThrow().available()).isFalse();
         assertThatThrownBy(() -> products.getVisibleProduct(product.id())).isInstanceOf(NotFoundException.class);
@@ -174,6 +177,14 @@ class ProductServiceTest {
         categories.deleteCategory(home.id());
 
         assertThat(categories.listCategories()).isEmpty();
+    }
+
+    private List<Product> search(String query, UUID categoryId) {
+        return search(query, categoryId, ProductSort.NAME);
+    }
+
+    private List<Product> search(String query, UUID categoryId, ProductSort sort) {
+        return products.searchPage(query, categoryId, sort, 1, ProductPage.MAX_SIZE).items();
     }
 
     private void product(String name, Category category, String... prices) {

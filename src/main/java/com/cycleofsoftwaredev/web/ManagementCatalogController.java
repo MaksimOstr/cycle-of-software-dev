@@ -106,7 +106,7 @@ public class ManagementCatalogController {
     @GetMapping("/products")
     public List<ProductResponse> allProducts() {
         currentUser.requireStaff();
-        return products.allProducts().stream().map(assembler::toResponse).toList();
+        return assembler.toResponses(products.allProducts());
     }
 
     @PostMapping("/products")

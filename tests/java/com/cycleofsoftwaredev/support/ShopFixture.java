@@ -12,6 +12,7 @@ import com.cycleofsoftwaredev.catalog.domain.Category;
 import com.cycleofsoftwaredev.catalog.domain.Product;
 import com.cycleofsoftwaredev.catalog.infrastructure.InMemoryCategoryRepository;
 import com.cycleofsoftwaredev.catalog.infrastructure.InMemoryProductRepository;
+import com.cycleofsoftwaredev.catalog.infrastructure.InMemoryProductSearch;
 import com.cycleofsoftwaredev.delivery.api.DeliveryMethod;
 import com.cycleofsoftwaredev.delivery.application.CourierCostPolicy;
 import com.cycleofsoftwaredev.delivery.application.DeliveryService;
@@ -27,6 +28,7 @@ import com.cycleofsoftwaredev.ordering.application.PlaceOrderCommand;
 import com.cycleofsoftwaredev.ordering.domain.ContactInfo;
 import com.cycleofsoftwaredev.ordering.domain.PaymentMethod;
 import com.cycleofsoftwaredev.ordering.infrastructure.InMemoryOrderRepository;
+import com.cycleofsoftwaredev.ordering.infrastructure.InMemoryOrderSearch;
 import com.cycleofsoftwaredev.ordering.infrastructure.SequentialOrderNumberGenerator;
 import com.cycleofsoftwaredev.payment.api.PaymentSucceeded;
 import com.cycleofsoftwaredev.payment.application.PaymentService;
@@ -45,7 +47,8 @@ public class ShopFixture {
 
     private final InMemoryProductRepository productRepository = new InMemoryProductRepository();
     public final CategoryService categories = new CategoryService(new InMemoryCategoryRepository(), productRepository);
-    public final ProductService products = new ProductService(productRepository, categories);
+    public final ProductService products =
+            new ProductService(productRepository, new InMemoryProductSearch(productRepository), categories);
     public final InventoryService inventory =
             new InventoryService(new InMemoryStockRepository(), new InMemoryReservationRepository());
 
@@ -67,7 +70,8 @@ public class ShopFixture {
     public final CheckoutService checkout = new CheckoutService(orderRepository,
             new SequentialOrderNumberGenerator(clock), carts, delivery, inventory, payments, events, clock);
     public final OrderService orders = new OrderService(orderRepository, inventory, payments, events, clock);
-    public final OrderQueryService orderQueries = new OrderQueryService(orderRepository);
+    public final OrderQueryService orderQueries =
+            new OrderQueryService(orderRepository, new InMemoryOrderSearch(orderRepository));
 
     public final UUID customerId = UUID.randomUUID();
     private final Category category = categories.createCategory("Test category", null);

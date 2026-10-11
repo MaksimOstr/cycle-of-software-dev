@@ -315,6 +315,21 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(0));
         mvc.perform(get("/api/v1/management/orders").param("status", "LOST").header(AUTH, bearer(manager)))
                 .andExpect(status().isBadRequest());
+
+        // the phone is found by its digits; the newest order comes first and the page has the requested size
+        mvc.perform(get("/api/v1/management/orders").param("search", "050 123-45").param("size", "1")
+                        .header(AUTH, bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].number").value(orderNumber));
+        mvc.perform(get("/api/v1/management/orders").param("search", orderNumber).param("page", "2")
+                        .header(AUTH, bearer(manager)))
+                .andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/v1/management/orders").param("search", "100%_'; --").header(AUTH, bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/v1/management/orders").param("size", "0").header(AUTH, bearer(manager)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

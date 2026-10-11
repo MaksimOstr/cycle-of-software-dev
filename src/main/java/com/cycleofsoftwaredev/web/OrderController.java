@@ -4,12 +4,12 @@ import com.cycleofsoftwaredev.delivery.api.DeliveryMethod;
 import com.cycleofsoftwaredev.ordering.api.OrderStatus;
 import com.cycleofsoftwaredev.ordering.application.CheckoutResult;
 import com.cycleofsoftwaredev.ordering.application.CheckoutService;
-import com.cycleofsoftwaredev.ordering.application.OrderFilter;
 import com.cycleofsoftwaredev.ordering.application.OrderQueryService;
 import com.cycleofsoftwaredev.ordering.application.OrderService;
 import com.cycleofsoftwaredev.ordering.application.PlaceOrderCommand;
 import com.cycleofsoftwaredev.ordering.domain.ContactInfo;
 import com.cycleofsoftwaredev.ordering.domain.Order;
+import com.cycleofsoftwaredev.ordering.domain.OrderFilter;
 import com.cycleofsoftwaredev.ordering.domain.OrderItem;
 import com.cycleofsoftwaredev.ordering.domain.OrderStatusChange;
 import com.cycleofsoftwaredev.ordering.domain.PaymentMethod;
@@ -144,17 +144,19 @@ public class OrderController {
         return OrderResponse.of(orderService.cancelOrder(order.id(), actor, reason));
     }
 
-    /** Requirement "Order list" for managers: all orders with filters and search, newest first. */
+    /** Requirement "Order list" for managers: orders with filters and search, newest first, 50 per page. */
     @GetMapping("/management/orders")
     public List<OrderSummary> orders(@RequestParam(required = false) OrderStatus status,
                                      @RequestParam(required = false) PaymentMethod paymentMethod,
                                      @RequestParam(required = false) DeliveryMethod deliveryMethod,
                                      @RequestParam(required = false) Instant from,
                                      @RequestParam(required = false) Instant to,
-                                     @RequestParam(required = false) String search) {
+                                     @RequestParam(required = false) String search,
+                                     @RequestParam(defaultValue = "1") int page,
+                                     @RequestParam(defaultValue = "" + OrderQueryService.DEFAULT_PAGE_SIZE) int size) {
         currentUser.requireStaff();
         OrderFilter filter = new OrderFilter(status, paymentMethod, deliveryMethod, from, to, search);
-        return orderQueries.findOrders(filter).stream().map(OrderSummary::of).toList();
+        return orderQueries.findOrders(filter, page, size).stream().map(OrderSummary::of).toList();
     }
     /** Requirement "Order status update" for managers. */
     @PatchMapping("/management/orders/{number}/status")
