@@ -4,6 +4,7 @@ import com.cycleofsoftwaredev.delivery.api.DeliveryMethod;
 import com.cycleofsoftwaredev.ordering.api.OrderStatus;
 import com.cycleofsoftwaredev.ordering.application.CheckoutResult;
 import com.cycleofsoftwaredev.ordering.application.CheckoutService;
+import com.cycleofsoftwaredev.ordering.application.OrderFilter;
 import com.cycleofsoftwaredev.ordering.application.OrderQueryService;
 import com.cycleofsoftwaredev.ordering.application.OrderService;
 import com.cycleofsoftwaredev.ordering.application.PlaceOrderCommand;
@@ -75,6 +76,17 @@ public class OrderController {
         }
     }
 
+    /** One row of the manager's order list. */
+    public record OrderSummary(String number, OrderStatus status, String customerName, String email, String phone,
+                               PaymentMethod paymentMethod, DeliveryMethod deliveryMethod, Money total,
+                               Instant createdAt) {
+
+        static OrderSummary of(Order order) {
+            return new OrderSummary(order.number(), order.status(), order.contact().fullName(), order.contact().email(),
+                    order.contact().phone(), order.paymentMethod(), order.delivery().method(), order.total(),
+                    order.createdAt());
+        }
+    }
     /** Checkout. The SPA sends the same Idempotency-Key when it repeats the request. */
     @PostMapping("/orders")
     @ResponseStatus(HttpStatus.CREATED)
@@ -133,6 +145,19 @@ public class OrderController {
         return OrderResponse.of(orderService.cancelOrder(order.id(), actor, reason));
     }
 
+    /** Requirement "Order list" for managers: all orders with filters and search, newest first. */
+    @GetMapping("/management/orders")
+    public List<OrderSummary> orders(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
+                                     @RequestParam(required = false) OrderStatus status,
+                                     @RequestParam(required = false) PaymentMethod paymentMethod,
+                                     @RequestParam(required = false) DeliveryMethod deliveryMethod,
+                                     @RequestParam(required = false) Instant from,
+                                     @RequestParam(required = false) Instant to,
+                                     @RequestParam(required = false) String search) {
+        currentUser.requireStaff(userId);
+        OrderFilter filter = new OrderFilter(status, paymentMethod, deliveryMethod, from, to, search);
+        return orderQueries.findOrders(filter).stream().map(OrderSummary::of).toList();
+    }
     /** Requirement "Order status update" for managers. */
     @PatchMapping("/management/orders/{number}/status")
     public OrderResponse changeStatus(@PathVariable String number,

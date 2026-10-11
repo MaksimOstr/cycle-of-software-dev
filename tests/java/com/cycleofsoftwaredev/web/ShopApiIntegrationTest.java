@@ -282,6 +282,31 @@ class ShopApiIntegrationTest {
     }
 
     @Test
+    void managerFindsOrdersInTheOrderList() throws Exception {
+        String variantId = createProductInStock("SKU-" + System.nanoTime(), "500.00", 5);
+        String orderNumber = placeOrder(variantId, customer.id().toString());
+
+        mvc.perform(get("/api/v1/management/orders")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/management/orders").header(USER, customer.id())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/management/orders").param("search", orderNumber).header(USER, manager.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].number").value(orderNumber))
+                .andExpect(jsonPath("$[0].status").value("NEW"))
+                .andExpect(jsonPath("$[0].email").value("petro@example.com"))
+                .andExpect(jsonPath("$[0].total.amount").value(500.0));
+        mvc.perform(get("/api/v1/management/orders").param("status", "NEW").param("paymentMethod", "CASH_ON_DELIVERY")
+                        .param("deliveryMethod", "STORE_PICKUP").param("from", "2020-01-01T00:00:00Z").header(USER, manager.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.number == '" + orderNumber + "')]").isNotEmpty());
+        mvc.perform(get("/api/v1/management/orders").param("search", orderNumber).param("status", "SHIPPED")
+                        .header(USER, manager.id()))
+                .andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/v1/management/orders").param("status", "LOST").header(USER, manager.id()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void administratorManagesUsers() throws Exception {
         UserView admin = registration.createUser(
                 new RegisterUserCommand("admin" + System.nanoTime() + "@example.com", "Admin", "Admin12345"), Role.ADMINISTRATOR);
