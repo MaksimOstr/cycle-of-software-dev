@@ -20,9 +20,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use cases "Add to cart", "Manage cart" and "Promo codes". Depends only on the APIs of Catalog and Inventory. */
 @Service
+@Transactional
 public class CartService implements CartApi {
 
     private final CartRepository carts;

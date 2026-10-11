@@ -20,7 +20,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # compiles, runs all tests and checks that the test coverage is at least 70%
+      # compiles, runs all tests (PostgreSQL is started by Testcontainers in Docker of the runner)
+      # and checks that the test coverage is at least 70%
       - name: Build
         run: ./gradlew build
 
@@ -38,18 +39,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build the image
-        run: docker build -t shopsphere:ci .
+      # builds the image and starts the application together with its database;
+      # --wait succeeds only when the health checks of all containers pass
+      - name: Start the system with Docker Compose
+        run: docker compose up --build -d --wait --wait-timeout 180
 
-      - name: Start the container and wait for the health check
+      - name: Check the health endpoint and the catalog
         run: |
-          docker run -d --name shopsphere -p 8080:8080 shopsphere:ci
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
-              echo "The application is up"
-              exit 0
-            fi
-            sleep 2
-          done
-          docker logs shopsphere
-          exit 1
+          curl --fail --silent http://localhost:8080/actuator/health | grep '"status":"UP"'
+          curl --fail --silent "http://localhost:8080/api/v1/products?query=hoodie" | grep 'Basic Hoodie'
+
+      - name: Show the logs if something failed
+        if: failure()
+        run: docker compose logs

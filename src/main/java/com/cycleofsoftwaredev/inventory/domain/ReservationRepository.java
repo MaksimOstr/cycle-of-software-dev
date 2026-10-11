@@ -5,7 +5,7 @@ import java.util.UUID;
 
 public interface ReservationRepository {
 
-    void save(StockReservation reservation);
+    StockReservation save(StockReservation reservation);
 
     List<StockReservation> findByOrderId(UUID orderId);
 }

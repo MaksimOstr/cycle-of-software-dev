@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Use case "Checkout" (Laboratory Work 2, sequence diagram "placing an order").
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
  * of Cart, Delivery, Inventory and Payment (Dependency Inversion principle).
  */
 @Service
+@Transactional
 public class CheckoutService {
 
     private final OrderRepository orders;
@@ -57,9 +59,10 @@ public class CheckoutService {
 
     /**
      * Places an order from the cart. A repeated request with the same idempotency key returns the order
-     * created by the first request instead of creating a second one.
+     * created by the first request instead of creating a second one. The whole checkout is one transaction:
+     * if any step fails, the reservation, the order and the payment session are rolled back together.
      */
-    public synchronized CheckoutResult placeOrder(PlaceOrderCommand command, String idempotencyKey) {
+    public CheckoutResult placeOrder(PlaceOrderCommand command, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new IllegalArgumentException("Idempotency key is required");
         }

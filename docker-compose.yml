@@ -1,13 +1,45 @@
-# Starts the integrated ShopSphere application in a container: docker compose up --build
+# Databases only (the application is started from the IDE or with ./gradlew bootRun):
+#     docker compose up -d postgres
+# The whole system in containers:
+#     docker compose up --build -d
 services:
+  postgres:
+    image: postgres:17
+    container_name: shopsphere-postgres
+    environment:
+      POSTGRES_DB: shopsphere
+      POSTGRES_USER: shopsphere
+      # local development password; set POSTGRES_PASSWORD in a .env file to change it
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shopsphere}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # the data survives "docker compose down"; "docker compose down -v" removes it
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopsphere -d shopsphere"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   shopsphere:
     build: .
     image: shopsphere:latest
     container_name: shopsphere
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "${SHOPSPHERE_PORT:-8080}:8080"
     environment:
+      SHOPSPHERE_DB_URL: jdbc:postgresql://postgres:5432/shopsphere
+      SHOPSPHERE_DB_USER: shopsphere
+      SHOPSPHERE_DB_PASSWORD: ${POSTGRES_PASSWORD:-shopsphere}
       # demo users, catalog and stock are loaded at startup
       SHOPSPHERE_DEMO_DATA_ENABLED: "true"
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
     restart: unless-stopped
+
+volumes:
+  postgres-data:

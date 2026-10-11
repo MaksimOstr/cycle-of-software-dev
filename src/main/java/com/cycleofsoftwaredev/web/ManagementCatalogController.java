@@ -2,7 +2,6 @@ package com.cycleofsoftwaredev.web;
 
 import com.cycleofsoftwaredev.catalog.application.CategoryService;
 import com.cycleofsoftwaredev.catalog.application.ProductService;
-import com.cycleofsoftwaredev.catalog.domain.Category;
 import com.cycleofsoftwaredev.cart.application.PromoCodeService;
 import com.cycleofsoftwaredev.cart.domain.PromoCode;
 import com.cycleofsoftwaredev.inventory.application.InventoryService;
@@ -85,18 +84,18 @@ public class ManagementCatalogController {
 
     @PostMapping("/categories")
     @ResponseStatus(HttpStatus.CREATED)
-    public Category createCategory(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
+    public CategoryResponse createCategory(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                    @Valid @RequestBody CategoryRequest request) {
         currentUser.requireStaff(userId);
-        return categories.createCategory(request.name(), request.parentId());
+        return CategoryResponse.of(categories.createCategory(request.name(), request.parentId()));
     }
 
     @PutMapping("/categories/{categoryId}")
-    public Category renameCategory(@PathVariable UUID categoryId,
+    public CategoryResponse renameCategory(@PathVariable UUID categoryId,
                                    @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                    @Valid @RequestBody CategoryNameRequest request) {
         currentUser.requireStaff(userId);
-        return categories.renameCategory(categoryId, request.name());
+        return CategoryResponse.of(categories.renameCategory(categoryId, request.name()));
     }
 
     @DeleteMapping("/categories/{categoryId}")

@@ -1,10 +1,12 @@
 package com.cycleofsoftwaredev.catalog.domain;
 
 import com.cycleofsoftwaredev.shared.domain.Money;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 import java.util.UUID;
 
 /** A concrete purchasable version of a product (for example, size M, blue colour) with its own SKU and price. */
+@Embeddable
 public record ProductVariant(UUID id, String sku, String name, Money price) {
 
     public ProductVariant {

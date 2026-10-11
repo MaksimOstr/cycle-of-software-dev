@@ -1,5 +1,7 @@
 package com.cycleofsoftwaredev.web;
 
+import com.cycleofsoftwaredev.support.TestInfrastructure;
+import org.springframework.context.annotation.Import;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -30,6 +32,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** End-to-end scenario through the REST API: catalog, cart, checkout, payment webhook, order management. */
+@Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc
 @RecordApplicationEvents

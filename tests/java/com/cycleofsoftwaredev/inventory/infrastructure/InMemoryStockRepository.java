@@ -6,10 +6,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Repository;
 
-/** In-memory storage used until the PostgreSQL schema of the module is created (work item SHOP-16). */
-@Repository
+/** In-memory test double: lets the unit tests of the services run without a database. */
 public class InMemoryStockRepository implements StockRepository {
 
     private final Map<UUID, StockItem> items = new ConcurrentHashMap<>();
@@ -23,5 +21,16 @@ public class InMemoryStockRepository implements StockRepository {
     @Override
     public Optional<StockItem> findByVariantId(UUID variantId) {
         return Optional.ofNullable(items.get(variantId));
+    }
+
+    /** There is nothing to lock in a single-threaded unit test. */
+    @Override
+    public Optional<StockItem> lockByVariantId(UUID variantId) {
+        return findByVariantId(variantId);
+    }
+
+    @Override
+    public Optional<Integer> findAvailableQuantity(UUID variantId) {
+        return findByVariantId(variantId).map(StockItem::available);
     }
 }

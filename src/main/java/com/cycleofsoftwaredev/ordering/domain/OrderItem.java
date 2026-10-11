@@ -1,11 +1,15 @@
 package com.cycleofsoftwaredev.ordering.domain;
 
 import com.cycleofsoftwaredev.shared.domain.Money;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Ordered variant. Name and price are copied, so later catalog changes do not change the order. */
-public record OrderItem(UUID variantId, UUID productId, String sku, String productName, Money unitPrice, int quantity) {
+@Embeddable
+public record OrderItem(UUID variantId, UUID productId, String sku, @Column(length = 600) String productName,
+                        Money unitPrice, int quantity) {
 
     public OrderItem {
         Objects.requireNonNull(variantId);

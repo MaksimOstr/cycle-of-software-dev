@@ -1,8 +1,10 @@
 package com.cycleofsoftwaredev.ordering.domain;
 
+import jakarta.persistence.Embeddable;
 import java.util.regex.Pattern;
 
 /** Contact data of the person who placed the order (a guest or a registered customer). */
+@Embeddable
 public record ContactInfo(String fullName, String email, String phone) {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");

@@ -1,18 +1,28 @@
 package com.cycleofsoftwaredev.cart.domain;
 
 import com.cycleofsoftwaredev.shared.domain.Money;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
 
 /** Percentage discount code with an expiry date and a usage limit. */
+@Entity
+@Table(name = "promo_codes", schema = "cart")
 public class PromoCode {
 
-    private final String code;
-    private final int discountPercent;
-    private final Instant validUntil;
-    private final int usageLimit;
+    @Id
+    private String code;
+    private int discountPercent;
+    private Instant validUntil;
+    private int usageLimit;
     private int usedCount;
+
+    protected PromoCode() {
+        // for JPA
+    }
 
     public PromoCode(String code, int discountPercent, Instant validUntil, int usageLimit) {
         if (code == null || code.isBlank()) {

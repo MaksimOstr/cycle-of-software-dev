@@ -11,9 +11,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use cases "Category management" and "Category navigation". */
 @Service
+@Transactional
 public class CategoryService {
 
     /** Requirement "Category navigation": the tree has up to 3 levels, for example Home > Kitchen > Cookware. */
@@ -50,7 +52,7 @@ public class CategoryService {
         if (hasProducts) {
             throw new BusinessRuleException("The category contains products and cannot be deleted");
         }
-        categories.delete(id);
+        categories.deleteById(id);
     }
 
     public List<Category> listCategories() {

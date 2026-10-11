@@ -7,6 +7,20 @@ import com.cycleofsoftwaredev.shared.domain.Actor;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import com.cycleofsoftwaredev.shared.events.DomainEvent;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,6 +44,8 @@ import static com.cycleofsoftwaredev.ordering.api.OrderStatus.SHIPPED;
  * Order aggregate root. Enforces the order state machine (Laboratory Work 2, Figure 8) and records
  * the status history and the domain events for the other modules.
  */
+@Entity
+@Table(name = "orders", schema = "ordering")
 public class Order {
 
     public static final Duration PAYMENT_TIME_LIMIT = Duration.ofMinutes(30);
@@ -44,25 +60,56 @@ public class Order {
             CANCELLED, EnumSet.noneOf(OrderStatus.class),
             RETURNED, EnumSet.noneOf(OrderStatus.class));
 
-    private final UUID id;
-    private final String number;
-    private final String idempotencyKey;
-    private final UUID customerId;
-    private final ContactInfo contact;
-    private final PaymentMethod paymentMethod;
-    private final List<OrderItem> items;
-    private final String promoCode;
-    private final Money subtotal;
-    private final Money discount;
-    private final Money deliveryCost;
-    private final Money total;
-    private final Instant createdAt;
-    private final Instant paymentDeadline;
-    private final List<OrderStatusChange> history = new ArrayList<>();
+    @Id
+    private UUID id;
+    private String number;
+    private String idempotencyKey;
+    private UUID customerId;
+
+    @Embedded
+    @AttributeOverride(name = "fullName", column = @Column(name = "contact_name"))
+    @AttributeOverride(name = "email", column = @Column(name = "contact_email"))
+    @AttributeOverride(name = "phone", column = @Column(name = "contact_phone"))
+    private ContactInfo contact;
+
+    @Enumerated(EnumType.STRING)
+    private PaymentMethod paymentMethod;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "order_items", schema = "ordering", joinColumns = @JoinColumn(name = "order_id"))
+    @OrderColumn(name = "position")
+    private List<OrderItem> items;
+
+    private String promoCode;
+    private Money subtotal;
+    private Money discount;
+    private Money deliveryCost;
+    private Money total;
+    private Instant createdAt;
+    private Instant paymentDeadline;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "order_status_history", schema = "ordering", joinColumns = @JoinColumn(name = "order_id"))
+    @OrderColumn(name = "position")
+    private List<OrderStatusChange> history = new ArrayList<>();
+
+    /** Events are not stored: they are published right after the order is saved. */
+    @Transient
     private final List<DomainEvent> pendingEvents = new ArrayList<>();
+
+    @Embedded
+    @AttributeOverride(name = "method", column = @Column(name = "delivery_method"))
+    @AttributeOverride(name = "address", column = @Column(name = "delivery_address"))
+    @AttributeOverride(name = "trackingNumber", column = @Column(name = "tracking_number"))
     private DeliveryInfo delivery;
+
+    @Enumerated(EnumType.STRING)
     private OrderStatus status;
     private Instant deliveredAt;
+
+    protected Order() {
+        // for JPA
+    }
 
     private Order(UUID id, String number, String idempotencyKey, UUID customerId, ContactInfo contact,
                   DeliveryInfo delivery, PaymentMethod paymentMethod, List<OrderItem> items, String promoCode,
@@ -77,7 +124,7 @@ public class Order {
         this.contact = Objects.requireNonNull(contact);
         this.delivery = Objects.requireNonNull(delivery);
         this.paymentMethod = Objects.requireNonNull(paymentMethod);
-        this.items = List.copyOf(items);
+        this.items = new ArrayList<>(items);
         this.promoCode = promoCode;
         this.subtotal = this.items.stream().map(OrderItem::lineTotal).reduce(Money.zero(), Money::add);
         this.discount = Objects.requireNonNull(discount);
@@ -229,7 +276,7 @@ public class Order {
     }
 
     public List<OrderItem> items() {
-        return items;
+        return Collections.unmodifiableList(items);
     }
 
     public String promoCode() {

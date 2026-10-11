@@ -15,9 +15,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Read side of the Ordering module: order history, purchase verification and sales statistics. */
 @Service
+@Transactional(readOnly = true)
 public class OrderQueryService implements PurchaseVerificationApi, SalesStatisticsApi {
 
     private static final Set<OrderStatus> NOT_SOLD = EnumSet.of(OrderStatus.CANCELLED, OrderStatus.RETURNED);
