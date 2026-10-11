@@ -23,8 +23,8 @@ The project is developed during the "Software Development Life Cycle" laboratory
 - JUnit 5, AssertJ, Spring MockMvc for tests, JaCoCo for test coverage
 - Postman collection run with Newman for testing the API of the running application
 - PostgreSQL 17: Spring Data JPA (Hibernate) for the repositories, Liquibase for the schema (changes are written
-  in SQL), one database schema per module. Catalog, stock, promo codes, orders and payments are stored there;
-  users, reviews, store settings and carts are moved in the next branches.
+  in SQL), one database schema per module (`catalog`, `inventory`, `cart`, `ordering`, `payment`, `identity`, `reviews`,
+  `administration`). All business data is stored there; only carts are still kept in memory.
 - Testcontainers: the integration tests run on a real PostgreSQL started in Docker
 
 ## Architecture
