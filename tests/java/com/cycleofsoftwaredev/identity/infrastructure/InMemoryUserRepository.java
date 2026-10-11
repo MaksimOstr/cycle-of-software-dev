@@ -2,7 +2,9 @@ package com.cycleofsoftwaredev.identity.infrastructure;
 
 import com.cycleofsoftwaredev.identity.domain.User;
 import com.cycleofsoftwaredev.identity.domain.UserRepository;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,7 +32,11 @@ public class InMemoryUserRepository implements UserRepository {
     }
 
     @Override
-    public List<User> findAll() {
-        return List.copyOf(users.values());
+    public List<User> search(String text, int limit) {
+        return users.values().stream()
+                .filter(user -> user.email().contains(text) || user.fullName().toLowerCase(Locale.ROOT).contains(text))
+                .sorted(Comparator.comparing(User::email))
+                .limit(limit)
+                .toList();
     }
 }

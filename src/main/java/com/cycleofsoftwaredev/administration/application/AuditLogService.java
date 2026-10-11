@@ -3,7 +3,6 @@ package com.cycleofsoftwaredev.administration.application;
 import com.cycleofsoftwaredev.administration.domain.AuditEntry;
 import com.cycleofsoftwaredev.administration.domain.AuditLogRepository;
 import com.cycleofsoftwaredev.shared.events.DomainEvent;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.event.EventListener;
@@ -14,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class AuditLogService {
+
+    public static final int MAX_ENTRIES = 500;
 
     private final AuditLogRepository auditLog;
 
@@ -26,10 +27,11 @@ public class AuditLogService {
         auditLog.save(new AuditEntry(UUID.randomUUID(), event.getClass().getSimpleName(), event.toString(), event.occurredAt()));
     }
 
+    /** The newest records; the number is limited, because the log grows with every action. */
     public List<AuditEntry> latestEntries(int limit) {
-        return auditLog.findAll().stream()
-                .sorted(Comparator.comparing(AuditEntry::occurredAt).reversed())
-                .limit(limit)
-                .toList();
+        if (limit < 1 || limit > MAX_ENTRIES) {
+            throw new IllegalArgumentException("The number of records must be between 1 and " + MAX_ENTRIES);
+        }
+        return auditLog.findLatest(limit);
     }
 }

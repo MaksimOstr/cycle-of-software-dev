@@ -9,7 +9,6 @@ import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.NotFoundException;
 import com.cycleofsoftwaredev.shared.events.DomainEventPublisher;
 import java.time.Clock;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -21,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class UserManagementService {
 
+    public static final int MAX_SEARCH_RESULTS = 100;
+
     private final UserRepository users;
     private final DomainEventPublisher events;
     private final Clock clock;
@@ -31,14 +32,10 @@ public class UserManagementService {
         this.clock = clock;
     }
 
-    /** Users whose email or name contains the text; all users if the text is empty. */
+    /** The first 100 users whose email or name contains the text; any users if the text is empty. */
     public List<UserView> search(String query) {
         String text = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-        return users.findAll().stream()
-                .filter(user -> user.email().contains(text) || user.fullName().toLowerCase(Locale.ROOT).contains(text))
-                .sorted(Comparator.comparing(User::email))
-                .map(User::toView)
-                .toList();
+        return users.search(text, MAX_SEARCH_RESULTS).stream().map(User::toView).toList();
     }
 
     public UserView getUser(UUID userId) {

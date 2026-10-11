@@ -13,5 +13,9 @@ public interface UserRepository {
 
     Optional<User> findByEmail(String normalizedEmail);
 
-    List<User> findAll();
+    /**
+     * Users whose email or name contains the lower-case text (all users for an empty text), ordered by email,
+     * at most {@code limit} of them.
+     */
+    List<User> search(String text, int limit);
 }

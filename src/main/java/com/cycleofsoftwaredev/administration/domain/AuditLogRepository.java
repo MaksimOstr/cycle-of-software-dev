@@ -6,5 +6,6 @@ public interface AuditLogRepository {
 
     AuditEntry save(AuditEntry entry);
 
-    List<AuditEntry> findAll();
+    /** The newest records first, at most {@code limit} of them. */
+    List<AuditEntry> findLatest(int limit);
 }
