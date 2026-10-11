@@ -236,6 +236,15 @@ class ApiContractTest {
                 409, "BUSINESS_RULE_VIOLATED");
     }
 
+    /** Requirement "Stock management": the stock is kept for variants of the catalog only. */
+    @Test
+    void stockCannotBeSetForAVariantThatIsNotInTheCatalog() throws Exception {
+        String unknownVariant = UUID.randomUUID().toString();
+
+        expectError(json(put("/api/v1/management/stock/" + unknownVariant), "{\"onHand\":10}").header(AUTH, manager),
+                404, "NOT_FOUND");
+    }
+
     /** Requirement "Review moderation": a review is approved or rejected only by an explicit decision. */
     @Test
     void reviewIsModeratedOnlyByAnExplicitDecision() throws Exception {
