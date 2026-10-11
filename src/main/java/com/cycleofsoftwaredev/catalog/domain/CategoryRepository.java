@@ -12,5 +12,7 @@ public interface CategoryRepository {
 
     List<Category> findAll();
 
+    boolean existsByParentId(UUID parentId);
+
     void deleteById(UUID id);
 }

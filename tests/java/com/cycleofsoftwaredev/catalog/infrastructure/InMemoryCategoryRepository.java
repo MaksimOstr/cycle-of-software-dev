@@ -30,6 +30,11 @@ public class InMemoryCategoryRepository implements CategoryRepository {
     }
 
     @Override
+    public boolean existsByParentId(UUID parentId) {
+        return categories.values().stream().anyMatch(category -> parentId.equals(category.parentId()));
+    }
+
+    @Override
     public void deleteById(UUID id) {
         categories.remove(id);
     }

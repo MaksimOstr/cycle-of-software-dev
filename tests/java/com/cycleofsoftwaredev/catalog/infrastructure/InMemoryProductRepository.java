@@ -37,6 +37,11 @@ public class InMemoryProductRepository implements ProductRepository {
     }
 
     @Override
+    public boolean existsByCategoryId(UUID categoryId) {
+        return products.values().stream().anyMatch(product -> product.categoryId().equals(categoryId));
+    }
+
+    @Override
     public void deleteById(UUID id) {
         products.remove(id);
     }
