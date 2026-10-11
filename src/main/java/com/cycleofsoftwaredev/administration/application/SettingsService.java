@@ -5,9 +5,11 @@ import com.cycleofsoftwaredev.administration.api.SettingsApi;
 import com.cycleofsoftwaredev.administration.domain.StoreSettings;
 import com.cycleofsoftwaredev.administration.domain.StoreSettingsRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use case "Store settings". */
 @Service
+@Transactional
 public class SettingsService implements SettingsApi {
 
     private final StoreSettingsRepository settings;

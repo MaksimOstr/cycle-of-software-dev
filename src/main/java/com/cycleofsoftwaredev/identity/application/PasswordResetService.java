@@ -15,9 +15,11 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use case "Password recovery": a reset token is sent by email, is valid for 1 hour and works only once. */
 @Service
+@Transactional
 public class PasswordResetService {
 
     private static final int TOKEN_BYTES = 32;
@@ -53,7 +55,7 @@ public class PasswordResetService {
     }
 
     public void resetPassword(String tokenValue, String newPassword) {
-        PasswordResetToken token = tokens.findByValue(tokenValue == null ? "" : tokenValue)
+        PasswordResetToken token = tokens.findByToken(tokenValue == null ? "" : tokenValue)
                 .filter(found -> !found.isExpired(clock.instant()))
                 .orElseThrow(() -> new BusinessRuleException("The password reset link is invalid or has expired"));
         passwordPolicy.validate(newPassword);

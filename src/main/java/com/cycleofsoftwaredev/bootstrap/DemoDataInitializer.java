@@ -6,6 +6,7 @@ import com.cycleofsoftwaredev.catalog.application.ProductService;
 import com.cycleofsoftwaredev.catalog.domain.Category;
 import com.cycleofsoftwaredev.catalog.domain.Product;
 import com.cycleofsoftwaredev.catalog.domain.ProductVariant;
+import com.cycleofsoftwaredev.identity.api.IdentityApi;
 import com.cycleofsoftwaredev.identity.api.Role;
 import com.cycleofsoftwaredev.identity.api.UserView;
 import com.cycleofsoftwaredev.identity.application.RegisterUserCommand;
@@ -32,15 +33,17 @@ public class DemoDataInitializer implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(DemoDataInitializer.class);
 
     private final RegistrationService registration;
+    private final IdentityApi identity;
     private final CategoryService categories;
     private final ProductService products;
     private final InventoryService inventory;
     private final PromoCodeService promoCodes;
     private final Clock clock;
 
-    public DemoDataInitializer(RegistrationService registration, CategoryService categories, ProductService products,
+    public DemoDataInitializer(RegistrationService registration, IdentityApi identity, CategoryService categories, ProductService products,
                                InventoryService inventory, PromoCodeService promoCodes, Clock clock) {
         this.registration = registration;
+        this.identity = identity;
         this.categories = categories;
         this.products = products;
         this.inventory = inventory;
@@ -50,12 +53,9 @@ public class DemoDataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        UserView admin = registration.createUser(
-                new RegisterUserCommand("admin@shopsphere.local", "Store Administrator", "Admin12345"), Role.ADMINISTRATOR);
-        UserView manager = registration.createUser(
-                new RegisterUserCommand("manager@shopsphere.local", "Olena Manager", "Manager12345"), Role.MANAGER);
-        UserView customer = registration.register(
-                new RegisterUserCommand("customer@shopsphere.local", "Petro Customer", "Customer12345"));
+        UserView admin = user("admin@shopsphere.local", "Store Administrator", "Admin12345", Role.ADMINISTRATOR);
+        UserView manager = user("manager@shopsphere.local", "Olena Manager", "Manager12345", Role.MANAGER);
+        UserView customer = user("customer@shopsphere.local", "Petro Customer", "Customer12345", Role.CUSTOMER);
 
         if (categories.listCategories().isEmpty()) {
             loadCatalog();
@@ -63,6 +63,12 @@ public class DemoDataInitializer implements ApplicationRunner {
 
         log.info("Demo data loaded. Use the X-User-Id header: administrator={}, manager={}, customer={}",
                 admin.id(), manager.id(), customer.id());
+    }
+
+    /** Users are kept in PostgreSQL: a demo account is created only if it does not exist yet. */
+    private UserView user(String email, String fullName, String password, Role role) {
+        return identity.findUserByEmail(email)
+                .orElseGet(() -> registration.createUser(new RegisterUserCommand(email, fullName, password), role));
     }
 
     /** The catalog is kept in PostgreSQL, so it is created only once, in an empty database. */

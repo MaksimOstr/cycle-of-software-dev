@@ -2,6 +2,11 @@ package com.cycleofsoftwaredev.identity.domain;
 
 import com.cycleofsoftwaredev.identity.api.Role;
 import com.cycleofsoftwaredev.identity.api.UserView;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
@@ -13,6 +18,8 @@ import java.util.regex.Pattern;
  * A registered user. Single responsibility: keeps the information about the user (name, email, role)
  * and the state of the account. Password hashing, authentication and notifications are done by other classes.
  */
+@Entity
+@Table(name = "users", schema = "identity")
 public class User {
 
     /** Requirement "Login and logout": the account is locked after 5 consecutive failed attempts for 15 minutes. */
@@ -21,15 +28,22 @@ public class User {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
 
-    private final UUID id;
-    private final String email;
-    private final Instant registeredAt;
+    @Id
+    private UUID id;
+    private String email;
+    private Instant registeredAt;
     private String passwordHash;
     private String fullName;
+
+    @Enumerated(EnumType.STRING)
     private Role role;
     private int failedLogins;
     private Instant lockedUntil;
     private boolean blocked;
+
+    protected User() {
+        // for JPA
+    }
 
     public User(UUID id, String email, String fullName, String passwordHash, Role role, Instant registeredAt) {
         this.id = Objects.requireNonNull(id);

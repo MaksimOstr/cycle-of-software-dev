@@ -22,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -123,6 +124,14 @@ class SystemIntegrationTest {
         // Administration -> Delivery: prices are configured without changing the code
         mvc.perform(json(put("/api/v1/admin/settings/delivery"),
                         "{\"courierPrice\":100.00,\"novaPoshtaPrice\":70.00,\"freeShippingThreshold\":5000.00}").header(USER, adminId))
+                .andExpect(status().isOk());
+    }
+
+    /** The settings are stored in the database shared with the other test classes. */
+    @AfterEach
+    void restoreDeliverySettings() throws Exception {
+        mvc.perform(json(put("/api/v1/admin/settings/delivery"),
+                        "{\"courierPrice\":120.00,\"novaPoshtaPrice\":80.00,\"freeShippingThreshold\":2000.00}").header(USER, adminId))
                 .andExpect(status().isOk());
     }
 

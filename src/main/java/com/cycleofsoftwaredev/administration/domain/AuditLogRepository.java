@@ -4,7 +4,7 @@ import java.util.List;
 
 public interface AuditLogRepository {
 
-    void append(AuditEntry entry);
+    AuditEntry save(AuditEntry entry);
 
     List<AuditEntry> findAll();
 }

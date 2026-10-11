@@ -12,9 +12,11 @@ import java.util.List;
 import java.util.OptionalDouble;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Use cases "Write a review" and "Review moderation". */
 @Service
+@Transactional
 public class ReviewService {
 
     private final ReviewRepository reviews;

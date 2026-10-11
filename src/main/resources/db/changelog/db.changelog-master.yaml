@@ -4,3 +4,6 @@ databaseChangeLog:
   - include:
       file: changes/001-catalog-inventory-cart-ordering-payment.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/002-identity-reviews-administration.sql
+      relativeToChangelogFile: true

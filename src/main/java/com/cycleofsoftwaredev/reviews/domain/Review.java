@@ -1,22 +1,40 @@
 package com.cycleofsoftwaredev.reviews.domain;
 
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
 /** Customer review of a product. It is shown in the store only after moderation. */
+@Entity
+@Table(name = "reviews", schema = "reviews")
 public class Review {
 
     public static final int MAX_TEXT_LENGTH = 2000;
 
-    private final UUID id;
-    private final UUID productId;
-    private final UUID customerId;
-    private final int rating;
-    private final String text;
-    private final Instant createdAt;
+    @Id
+    private UUID id;
+    private UUID productId;
+    private UUID customerId;
+    private int rating;
+
+    @Column(name = "review_text", length = MAX_TEXT_LENGTH)
+    private String text;
+
+    private Instant createdAt;
+
+    @Enumerated(EnumType.STRING)
     private ReviewStatus status = ReviewStatus.PENDING;
+
+    protected Review() {
+        // for JPA
+    }
 
     public Review(UUID id, UUID productId, UUID customerId, int rating, String text, Instant createdAt) {
         if (rating < 1 || rating > 5) {
