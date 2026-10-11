@@ -10,12 +10,14 @@ import com.cycleofsoftwaredev.support.TestInfrastructure;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 /** Carts in the real PostgreSQL started by Testcontainers. */
+@Tag("component")
 @Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 class CartPersistenceTest {

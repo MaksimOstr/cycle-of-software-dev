@@ -15,6 +15,7 @@ import com.cycleofsoftwaredev.support.TestInfrastructure;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import org.springframework.context.annotation.Import;
  * Catalog search executed by PostgreSQL (WHERE, ORDER BY, LIMIT). The same rules are checked for the
  * in-memory test double in ProductServiceTest; here they are checked for the real SQL.
  */
+@Tag("component")
 @Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 class ProductSearchPostgresTest {

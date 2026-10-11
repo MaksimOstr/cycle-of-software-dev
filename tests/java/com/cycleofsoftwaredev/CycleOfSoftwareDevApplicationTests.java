@@ -5,10 +5,12 @@ import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.cycleofsoftwaredev.catalog.application.CategoryService;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+@Tag("component")
 @Import(TestInfrastructure.class)
 @SpringBootTest
 class CycleOfSoftwareDevApplicationTests {

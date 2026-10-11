@@ -85,6 +85,26 @@ tasks.named('test') {
     finalizedBy tasks.named('jacocoTestReport')
 }
 
+// Test levels of Laboratory Work 6. A test class without a tag is a unit test: it needs neither Spring nor
+// Docker. "component" tests check a part of the application with its real PostgreSQL and Redis (Testcontainers),
+// "system" tests run user scenarios and non-functional checks on the whole application.
+//     ./gradlew unitTest | componentTest | systemTest      report: build/reports/tests/<task>/index.html
+// "test" still runs all levels together and is the one that measures the coverage.
+def testLevels = [
+        unitTest     : { excludeTags 'component', 'system' },
+        componentTest: { includeTags 'component' },
+        systemTest   : { includeTags 'system' }
+]
+testLevels.each { taskName, tags ->
+    tasks.register(taskName, Test) {
+        group = 'verification'
+        description = "Runs the tests of one level: ${taskName}"
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        useJUnitPlatform(tags)
+    }
+}
+
 // Coverage report: build/reports/jacoco/test/html/index.html (NFR "Test coverage 70%")
 tasks.named('jacocoTestReport') {
     dependsOn tasks.named('test')
