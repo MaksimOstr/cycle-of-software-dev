@@ -169,6 +169,9 @@ After that the application was moved from in-memory storage to real infrastructu
 - **Transactions**: every use case of a service is one transaction. Checkout either reserves the stock, saves
   the order and creates the payment, or changes nothing. Stock rows and orders are locked with
   `SELECT ... FOR UPDATE` while they are changed, so simultaneous orders cannot oversell.
+- **Queries**: the catalog page, the order list and the sales statistics are computed by PostgreSQL
+  (`WHERE`, `ORDER BY`, `LIMIT`, aggregates), so a request loads only the 24 products or 50 orders of its page,
+  not the whole table; the stock of all products of a page is read with one query.
 - **JWT**: login returns an access token (15 minutes) and a refresh token (7 days); the server keeps no session.
 - **Redis** keeps what must expire by itself: refresh tokens (so logout and token rotation work) and the
   counters that limit login and registration to 20 requests per minute per IP address.
@@ -375,7 +378,7 @@ tokens for the next ones, so nothing has to be copied by hand.
 | `GET/POST /api/v1/products/{id}/reviews` | Reviews | everyone / customer who received the product |
 | `POST /api/v1/payments/webhook` | Payment provider notifications | payment provider |
 | `/api/v1/management/**` (create, edit and delete categories and products, hide products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
-| `GET /api/v1/management/orders?status=&paymentMethod=&deliveryMethod=&from=&to=&search=` | Order list with filters and search by order number, customer email or phone | manager, administrator |
+| `GET /api/v1/management/orders?status=&paymentMethod=&deliveryMethod=&from=&to=&search=&page=&size=` | Order list with filters and search by order number, customer email or phone; newest first, 50 per page | manager, administrator |
 | `/api/v1/admin/**` (delivery settings, audit log, sales report) | Administration | administrator |
 | `GET /api/v1/admin/users?query=`, `GET /api/v1/admin/users/{id}`, `POST /api/v1/admin/users/{id}/block`, `POST .../unblock`, `PUT /api/v1/admin/users/{id}/role` | User management: search, block and unblock accounts, assign roles; every change is written to the audit log | administrator |
 
@@ -406,11 +409,12 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | `ShopApiIntegrationTest`, `CycleOfSoftwareDevApplicationTests` | The whole application through the REST API, on PostgreSQL and Redis in Testcontainers |
 | `AuthenticationApiTest` | JWT: login, forged and expired tokens, access rules by role, refresh token rotation, logout, blocked users, login rate limit |
 | `CartPersistenceTest` | Carts in PostgreSQL: items keep their order, abandoned guest carts are removed after 30 days |
+| `ProductSearchPostgresTest` | Catalog search executed by PostgreSQL: text in name and description, category with subcategories, sorting, paging, special characters |
 | `SystemIntegrationTest` | Integration of all modules: a cash order from catalog to review and a card order with payment, cancellation and refund; emails, sales report and audit log |
 | `NonFunctionalRequirementsTest` | 95% of catalog, search and cart responses within 500 ms on 5,000 products; 20 simultaneous orders for 5 items create exactly 5 orders |
 | `PlatformEndpointsTest` | Health check and OpenAPI document |
 
-131 tests; line coverage of the server code is about 94% (JaCoCo), the build fails below 70%. The unit tests of
+138 tests; line coverage of the server code is about 94% (JaCoCo), the build fails below 70%. The unit tests of
 the services use in-memory repositories from `/tests` and run in milliseconds; every test that starts the
 application works with the real PostgreSQL and Redis.
 
@@ -493,11 +497,11 @@ does not exist yet, the others need the production environment).
 | **4.1 Performance** | | |
 | Server response time (95% within 500 ms) | Partial | `NonFunctionalRequirementsTest`: the 95th percentile of catalog, search and cart requests is below 500 ms on 5,000 products. A load of 1,000 concurrent users was not tested |
 | Page load time | Not met | No frontend yet |
-| Search speed (1 s for 100,000 products) | Partial | Search answers within the limit on 5,000 products (the size of the store catalog), but products are filtered and sorted in the application after loading; 100,000 products need filtering in SQL or full-text search |
+| Search speed (1 s for 100,000 products) | Partial | PostgreSQL filters, sorts and returns only the requested page (`JdbcProductSearch`); on 5,000 products (the size of the store catalog) a search takes milliseconds. Not measured on 100,000 products: the text is searched as a substring, which scans the table, so a full-text or trigram index is the next step |
 | Peak order throughput (50 orders per minute) | Partial | 20 simultaneous checkouts are processed in less than a second in the test; a long load test was not done |
 | **4.2 Scalability** | | |
 | Adding servers | Partial | The application is stateless: no session (JWT), all data in PostgreSQL and Redis, order numbers from a database sequence, row locks instead of in-process locks. Running several instances behind a load balancer was not tested |
-| Data volume | Partial | Data is stored in PostgreSQL with indexes on the lookup columns. The catalog search and the order list of managers still filter in the application, which does not fit 100,000 products and 1,000,000 orders |
+| Data volume | Partial | Data is stored in PostgreSQL with indexes on the lookup columns. The catalog search, the order list and the sales statistics are SQL queries that return one page or one aggregate. The audit log, the user search and the product list of the Management Panel still load whole tables |
 | **4.3 Reliability and availability** | | |
 | Availability 99.5% | Partial | Health check `/actuator/health` covers the application, PostgreSQL and Redis; Docker `HEALTHCHECK`, `restart: unless-stopped`, graceful shutdown. There is no production hosting to measure |
 | Backups and recovery | Not met | The data is kept in a Docker volume and survives restarts, but there is no automatic backup |
@@ -594,13 +598,14 @@ Branches of the move to real storage and security (after Lab 5, in merge order):
 | `feature/postgres-accounts` | Ivan | Maksym | Users, password reset tokens, reviews, audit log and store settings in PostgreSQL |
 | `feature/postgres-carts` | Maksym | Ivan | Carts in PostgreSQL, removal of abandoned guest carts |
 | `feature/jwt-security` | Ivan | Maksym | Spring Security, JWT access and refresh tokens, logout, login rate limit, Redis, Postman collection with tokens |
+| `feature/sql-search` | Maksym | Ivan | Catalog search, order list and sales statistics as SQL queries with paging; stock of a page in one query |
 
 ## Roadmap
 
 Next items of the product backlog (Laboratory Work 3); they close the requirements that are partial or not
 implemented in the [Requirements fulfillment](#requirements-fulfillment) tables:
 
-- Catalog search, filters and pagination in SQL (PostgreSQL full-text search) instead of filtering in the application
+- Full-text or trigram index for the catalog search; filters by price, brand and attributes
 - Stripe Checkout Sessions adapter with webhook signature verification instead of `SimulatedPaymentProvider` (SHOP-39)
 - Transactional outbox for domain events and the SMTP email adapter (SHOP-42, SHOP-43)
 - React 19 single-page application: Storefront and Management Panel (SHOP-22)
