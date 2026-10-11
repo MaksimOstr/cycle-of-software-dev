@@ -22,8 +22,10 @@ The project is developed during the "Software Development Life Cycle" laboratory
 - Docker and Docker Compose for running the application in a container, GitHub Actions for CI
 - JUnit 5, AssertJ, Spring MockMvc for tests, JaCoCo for test coverage
 - Postman collection run with Newman for testing the API of the running application
-- Storage: in-memory repositories in this stage. PostgreSQL 17 with Flyway, JWT security, Stripe, Nova Poshta
-  and SMTP adapters are the next backlog items (see [Roadmap](#roadmap)).
+- PostgreSQL 17: Spring Data JPA (Hibernate) for the repositories, Liquibase for the schema (changes are written
+  in SQL), one database schema per module. Catalog, stock, promo codes, orders and payments are stored there;
+  users, reviews, store settings and carts are moved in the next branches.
+- Testcontainers: the integration tests run on a real PostgreSQL started in Docker
 
 ## Architecture
 
@@ -35,14 +37,16 @@ ten business modules with explicit public interfaces. Every module has the same 
   api/             public contract for other modules: interfaces, DTOs, domain events
   domain/          entities, value objects, business rules, repository and gateway interfaces
   application/     use cases (application services), one class per group of related use cases
-  infrastructure/  implementations of the domain interfaces (in-memory repositories, provider adapters)
+  infrastructure/  implementations of the domain interfaces (Spring Data JPA repositories, provider adapters)
 ```
 
 Rules (checked automatically by `ModuleBoundariesTest`):
 
 1. A module may use only the `api` package of another module, never its domain or services.
 2. The shared kernel (`shared`) does not depend on any module.
-3. The domain model does not depend on Spring or on infrastructure classes.
+3. The domain model does not depend on Spring or on infrastructure classes. Entities carry only the standard
+   JPA mapping annotations (`jakarta.persistence`); the repositories are interfaces of the domain, implemented
+   in `infrastructure` by Spring Data.
 
 Modules communicate synchronously through `api` interfaces (for example, `CheckoutService` → `InventoryApi.reserve`)
 and asynchronously through domain events (`OrderPlaced`, `OrderStatusChanged`, `PaymentSucceeded`,
@@ -70,6 +74,7 @@ uniform error format and role checks.
   web/              REST controllers, error handling, current user resolution
   bootstrap/        demo data for local runs
 /src/main/resources application.properties
+                    db/changelog: Liquibase changelog, schema changes in SQL
 /tests/java         unit, architecture and integration tests (Gradle test source set)
 /docs               documentation of laboratory works 1–3 (specification, architecture, Agile process),
                     Postman collection of laboratory work 5
@@ -152,13 +157,16 @@ sorting and pagination of the product list, the order list with filters for mana
 
 ### Requirements
 
-- JDK 25 (Gradle itself and all libraries are downloaded by the Gradle wrapper) **or** Docker with Docker Compose
-  (then nothing else has to be installed)
-- Free port 8080
+- Docker with Docker Compose: PostgreSQL runs in a container, and the tests start their own PostgreSQL with
+  Testcontainers
+- JDK 25 to build and run from the sources (Gradle and all libraries are downloaded by the Gradle wrapper);
+  it is not needed if the application is started in a container too
+- Free ports 8080 (application) and 5432 (PostgreSQL)
 
 ### Build and test
 
 ```bash
+# Docker must be running: the integration tests start PostgreSQL in a container
 ./gradlew build        # compile, run all tests and check the test coverage (Windows: gradlew.bat build)
 ./gradlew test         # run tests only; report: build/reports/tests/test/index.html
                        # coverage report: build/reports/jacoco/test/html/index.html
@@ -175,6 +183,10 @@ nothing has to be installed manually.
 | `spring-boot-starter-validation` | 4.1.1 (Spring Boot BOM) | validation of requests |
 | `spring-boot-starter-actuator` | 4.1.1 (Spring Boot BOM) | health check `/actuator/health` |
 | `springdoc-openapi-starter-webmvc-ui` | 3.1.1 | OpenAPI 3 document and Swagger UI |
+| `spring-boot-starter-data-jpa` | 4.1.1 (Spring Boot BOM), Hibernate 7.4 | repositories and transactions |
+| `spring-boot-starter-liquibase` | 4.1.1 (Spring Boot BOM), Liquibase 5.0 | database schema migrations |
+| `org.postgresql:postgresql` | 42.7 (Spring Boot BOM) | PostgreSQL JDBC driver |
+| `spring-boot-testcontainers`, `testcontainers-postgresql` | 4.1.1 / 2.0 (Spring Boot BOM) | PostgreSQL in Docker for the integration tests |
 | `spring-boot-starter-test`, `spring-boot-starter-webmvc-test` | 4.1.1 (Spring Boot BOM) | JUnit 5, AssertJ, MockMvc |
 | JaCoCo (Gradle plugin) | 0.8.15 | test coverage report and the 70% coverage check |
 
@@ -184,6 +196,8 @@ How the versions are kept synchronized:
   the BOM of Spring Boot 4.1.1 (`io.spring.dependency-management` plugin), so they always match each other.
 - Versions of the libraries outside the BOM (springdoc, JaCoCo) are declared once in the `ext` block.
 - `failOnVersionConflict()` stops the build if two libraries require different versions of one dependency.
+  It found one conflict: Liquibase needs `commons-text` 1.15.0 and springdoc 1.13.1, so the version is fixed
+  explicitly (`commonsTextVersion`, the newer one is compatible with both).
 - `./gradlew dependencies --configuration runtimeClasspath` prints the resolved dependency tree.
 
 ### Continuous integration
@@ -198,26 +212,40 @@ and for every push to `master`:
 
 ### Run
 
-Locally, with the JDK:
+The application needs PostgreSQL. [`docker-compose.yml`](docker-compose.yml) starts it with the database,
+user and password that the application uses by default, so nothing has to be configured.
+
+**Databases in Docker, the application from the sources** (convenient for development and for a demo):
 
 ```bash
-./gradlew bootRun
+docker compose up -d postgres     # PostgreSQL 17 on localhost:5432
+./gradlew bootRun                 # the application on http://localhost:8080
 ```
 
-Or in a container (the image is built from the sources by the multi-stage [`Dockerfile`](Dockerfile), so the
-result does not depend on the software installed on the computer):
+**Everything in containers** (the image is built from the sources by the multi-stage [`Dockerfile`](Dockerfile)):
 
 ```bash
-docker compose up --build -d      # build the image and start the application
-docker compose ps                 # the container becomes "healthy" when /actuator/health answers UP
-docker compose logs -f            # application log: demo user ids, emails
-docker compose down               # stop and remove the container
+docker compose up --build -d      # PostgreSQL and the application
+docker compose ps                 # both containers become "healthy"
+docker compose logs -f shopsphere # application log: applied migrations, demo user ids, emails
+docker compose down               # stop; the data stays in the volume
+docker compose down -v            # stop and delete the data
 ```
 
-Another port can be chosen with `SHOPSPHERE_PORT=9090 docker compose up -d`.
+| Setting | Environment variable | Default |
+|---------|----------------------|---------|
+| Database URL | `SHOPSPHERE_DB_URL` | `jdbc:postgresql://localhost:5432/shopsphere` |
+| Database user and password | `SHOPSPHERE_DB_USER`, `SHOPSPHERE_DB_PASSWORD` | `shopsphere` / `shopsphere` (local development only) |
+| Ports published by Docker Compose | `SHOPSPHERE_PORT`, `POSTGRES_PORT` | `8080`, `5432` |
+| Password of the PostgreSQL container | `POSTGRES_PASSWORD` (for example in a `.env` file, which is not committed) | `shopsphere` |
+
+At startup Liquibase applies the changes from [`src/main/resources/db/changelog`](src/main/resources/db/changelog)
+that are not in the database yet, and Hibernate checks that the entities match the schema
+(`spring.jpa.hibernate.ddl-auto=validate`). A schema change is a new SQL file in `db/changelog/changes`
+added to `db.changelog-master.yaml`; applied files are never edited.
 
 The application starts on `http://localhost:8080` and loads demo data: categories, products with stock and the
-promo code `WELCOME10`. Demo accounts (password in brackets):
+promo code `WELCOME10` (only into an empty database). Demo accounts (password in brackets):
 
 | Role | Email |
 |------|-------|
