@@ -371,6 +371,20 @@ class ShopApiIntegrationTest {
 
         mvc.perform(post("/api/v1/admin/users/" + admin.id() + "/block").header(AUTH, bearer(admin)))
                 .andExpect(status().isConflict());
+
+        // the search is done by the database: by a part of the name without case, special characters are literal
+        mvc.perform(get("/api/v1/admin/users").param("query", "CUSTOMER").header(AUTH, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + customer.id() + "')]").isNotEmpty());
+        mvc.perform(get("/api/v1/admin/users").param("query", "%_'; --").header(AUTH, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/v1/admin/audit-log").param("limit", "2").header(AUTH, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].eventType").value("UserAccountChanged"));
+        mvc.perform(get("/api/v1/admin/audit-log").param("limit", "100000").header(AUTH, bearer(admin)))
+                .andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/admin/audit-log").header(AUTH, bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.eventType == 'UserAccountChanged')]").isNotEmpty());

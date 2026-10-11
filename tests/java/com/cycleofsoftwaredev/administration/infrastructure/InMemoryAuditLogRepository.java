@@ -2,6 +2,7 @@ package com.cycleofsoftwaredev.administration.infrastructure;
 
 import com.cycleofsoftwaredev.administration.domain.AuditEntry;
 import com.cycleofsoftwaredev.administration.domain.AuditLogRepository;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -17,7 +18,10 @@ public class InMemoryAuditLogRepository implements AuditLogRepository {
     }
 
     @Override
-    public List<AuditEntry> findAll() {
-        return List.copyOf(entries);
+    public List<AuditEntry> findLatest(int limit) {
+        return entries.stream()
+                .sorted(Comparator.comparing(AuditEntry::occurredAt).reversed())
+                .limit(limit)
+                .toList();
     }
 }
