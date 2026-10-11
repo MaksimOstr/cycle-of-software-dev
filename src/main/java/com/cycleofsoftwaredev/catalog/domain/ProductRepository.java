@@ -13,4 +13,6 @@ public interface ProductRepository {
     Optional<Product> findByVariantId(UUID variantId);
 
     List<Product> findAll();
+
+    void delete(UUID id);
 }

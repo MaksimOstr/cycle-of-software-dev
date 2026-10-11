@@ -11,4 +11,6 @@ public interface CategoryRepository {
     Optional<Category> findById(UUID id);
 
     List<Category> findAll();
+
+    void delete(UUID id);
 }

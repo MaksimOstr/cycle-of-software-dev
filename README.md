@@ -200,14 +200,14 @@ Emails are written to the application log (`EMAIL to=...`).
 |-----------------|-------------|--------|
 | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Registration and login; the account is locked for 15 minutes after 5 failed logins | everyone |
 | `POST /api/v1/auth/password-reset`, `POST /api/v1/auth/password-reset/confirm` | Password recovery: a code is sent by email, is valid for 1 hour and works once | everyone |
-| `GET /api/v1/categories`, `GET /api/v1/products?query=&categoryId=`, `GET /api/v1/products/{id}` | Catalog | everyone |
+| `GET /api/v1/categories`, `GET /api/v1/products?query=&categoryId=&sort=&page=&size=`, `GET /api/v1/products/{id}` | Catalog: category tree (up to 3 levels), search, products of a category with its subcategories, sorting (`NAME`, `PRICE_ASC`, `PRICE_DESC`), pages of 24 products | everyone |
 | `POST /api/v1/carts`, `GET /api/v1/carts/{id}`, `POST/PUT/DELETE /api/v1/carts/{id}/items[/{variantId}]`, `POST /api/v1/carts/{id}/promo-code` | Cart | everyone |
 | `POST /api/v1/orders` (header `Idempotency-Key`) | Checkout | everyone |
 | `GET /api/v1/orders/{number}` | Order tracking | owner of the order and staff; for a guest order — `?email=` used at checkout |
 | `GET /api/v1/me/orders`, `POST /api/v1/orders/{number}/cancel` | Order history and cancellation | customer |
 | `GET/POST /api/v1/products/{id}/reviews` | Reviews | everyone / customer who received the product |
 | `POST /api/v1/payments/webhook` | Payment provider notifications | payment provider |
-| `/api/v1/management/**` (categories, products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
+| `/api/v1/management/**` (create, edit and delete categories and products, hide products, variants, stock, promo codes, order status, review moderation) | Management panel | manager, administrator |
 | `/api/v1/admin/**` (delivery settings, audit log, sales report) | Administration | administrator |
 
 Every error, including malformed JSON and unknown paths, is returned in one format:

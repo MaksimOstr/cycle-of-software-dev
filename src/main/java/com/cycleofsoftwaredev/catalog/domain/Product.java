@@ -5,6 +5,7 @@ import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -62,8 +63,18 @@ public class Product {
         return new VariantView(variant.id(), id, variant.sku(), name, variant.name(), variant.price(), active);
     }
 
+    /** A hidden product stays in the catalog for managers but is not shown to customers. */
     public void deactivate() {
         this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    /** Price shown in product lists: the cheapest variant. */
+    public Optional<Money> lowestPrice() {
+        return variants.stream().map(ProductVariant::price).min(Comparator.naturalOrder());
     }
 
     public UUID id() {

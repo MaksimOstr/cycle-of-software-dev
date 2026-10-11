@@ -1,5 +1,6 @@
 package com.cycleofsoftwaredev.web;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -224,6 +225,60 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$.email").value(email));
         mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + email + "\",\"password\":\"wrong1234\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void managerEditsHidesAndDeletesProductsAndCategories() throws Exception {
+        String name = "Lamp " + System.nanoTime();
+        String categoryId = read(mvc.perform(json(post("/api/v1/management/categories"), "{\"name\":\"Lightning\"}")
+                .header(USER, manager.id())).andExpect(status().isCreated()), "$.id");
+        String productId = read(mvc.perform(json(post("/api/v1/management/products"),
+                        "{\"name\":\"" + name + "\",\"description\":\"Desk lamp\",\"categoryId\":\"" + categoryId + "\"}")
+                .header(USER, manager.id())).andExpect(status().isCreated()), "$.id");
+        mvc.perform(json(post("/api/v1/management/products/" + productId + "/variants"),
+                        "{\"sku\":\"LAMP-" + System.nanoTime() + "\",\"name\":\"white\",\"price\":799.00}").header(USER, manager.id()))
+                .andExpect(status().isCreated());
+
+        mvc.perform(json(put("/api/v1/management/categories/" + categoryId), "{\"name\":\"Lighting\"}").header(USER, manager.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Lighting"));
+        mvc.perform(json(put("/api/v1/management/products/" + productId),
+                        "{\"name\":\"" + name + " LED\",\"description\":\"LED desk lamp\",\"categoryId\":\"" + categoryId + "\"}")
+                        .header(USER, manager.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.description").value("LED desk lamp"));
+        mvc.perform(get("/api/v1/products").param("query", name).param("categoryId", categoryId).param("sort", "PRICE_DESC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.size").value(24))
+                .andExpect(jsonPath("$.items[0].name").value(name + " LED"))
+                .andExpect(jsonPath("$.items[0].variants[0].price.amount").value(799.0));
+        mvc.perform(get("/api/v1/products").param("sort", "CHEAPEST")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/products").param("page", "0")).andExpect(status().isBadRequest());
+
+        // a hidden product disappears from the storefront but stays in the management panel
+        mvc.perform(json(patch("/api/v1/management/products/" + productId + "/visibility"), "{\"visible\":false}")
+                        .header(USER, customer.id()))
+                .andExpect(status().isForbidden());
+        mvc.perform(json(patch("/api/v1/management/products/" + productId + "/visibility"), "{\"visible\":false}")
+                        .header(USER, manager.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(false));
+        mvc.perform(get("/api/v1/products/" + productId)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/products").param("query", name)).andExpect(jsonPath("$.totalItems").value(0));
+        mvc.perform(get("/api/v1/management/products").header(USER, manager.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + productId + "')].active").value(false));
+
+        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(USER, manager.id()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The category contains products and cannot be deleted"));
+        mvc.perform(delete("/api/v1/management/products/" + productId).header(USER, manager.id()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(USER, manager.id()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/management/categories/" + categoryId).header(USER, manager.id()))
+                .andExpect(status().isNotFound());
     }
 
     @Test
