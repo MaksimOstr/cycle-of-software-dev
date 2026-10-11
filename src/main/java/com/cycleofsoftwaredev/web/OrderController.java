@@ -21,6 +21,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -91,9 +92,8 @@ public class OrderController {
     @PostMapping("/orders")
     @ResponseStatus(HttpStatus.CREATED)
     public CheckoutResult placeOrder(@RequestHeader("Idempotency-Key") String idempotencyKey,
-                                     @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                      @Valid @RequestBody PlaceOrderRequest request) {
-        UUID customerId = userId == null ? null : currentUser.requireUser(userId).userId();
+        UUID customerId = currentUser.optionalUser().map(Actor::userId).orElse(null);
         PlaceOrderCommand command = new PlaceOrderCommand(request.cartId(), customerId,
                 new ContactInfo(request.fullName(), request.email(), request.phone()),
                 request.deliveryMethod(), request.deliveryAddress(), request.paymentMethod());
@@ -106,16 +106,16 @@ public class OrderController {
      */
     @GetMapping("/orders/{number}")
     public OrderResponse getOrder(@PathVariable String number,
-                                  @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                   @RequestParam(required = false) String email) {
         Order order = orderQueries.getByNumber(number);
-        requireAccess(order, userId, email);
+        requireAccess(order, email);
         return OrderResponse.of(order);
     }
 
-    private void requireAccess(Order order, UUID userId, String email) {
-        if (userId != null) {
-            Actor actor = currentUser.requireUser(userId);
+    private void requireAccess(Order order, String email) {
+        Optional<Actor> signedIn = currentUser.optionalUser();
+        if (signedIn.isPresent()) {
+            Actor actor = signedIn.get();
             if (actor.isStaff() || actor.userId().equals(order.customerId())) {
                 return;
             }
@@ -130,16 +130,15 @@ public class OrderController {
 
     /** Order history of the signed-in customer. */
     @GetMapping("/me/orders")
-    public List<OrderResponse> myOrders(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        Actor actor = currentUser.requireUser(userId);
+    public List<OrderResponse> myOrders() {
+        Actor actor = currentUser.requireUser();
         return orderQueries.customerOrders(actor.userId()).stream().map(OrderResponse::of).toList();
     }
 
     @PostMapping("/orders/{number}/cancel")
     public OrderResponse cancel(@PathVariable String number,
-                                @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                 @RequestBody(required = false) CancelRequest request) {
-        Actor actor = currentUser.requireUser(userId);
+        Actor actor = currentUser.requireUser();
         String reason = request == null || request.reason() == null ? "Cancelled by customer" : request.reason();
         Order order = orderQueries.getByNumber(number);
         return OrderResponse.of(orderService.cancelOrder(order.id(), actor, reason));
@@ -147,23 +146,21 @@ public class OrderController {
 
     /** Requirement "Order list" for managers: all orders with filters and search, newest first. */
     @GetMapping("/management/orders")
-    public List<OrderSummary> orders(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                     @RequestParam(required = false) OrderStatus status,
+    public List<OrderSummary> orders(@RequestParam(required = false) OrderStatus status,
                                      @RequestParam(required = false) PaymentMethod paymentMethod,
                                      @RequestParam(required = false) DeliveryMethod deliveryMethod,
                                      @RequestParam(required = false) Instant from,
                                      @RequestParam(required = false) Instant to,
                                      @RequestParam(required = false) String search) {
-        currentUser.requireStaff(userId);
+        currentUser.requireStaff();
         OrderFilter filter = new OrderFilter(status, paymentMethod, deliveryMethod, from, to, search);
         return orderQueries.findOrders(filter).stream().map(OrderSummary::of).toList();
     }
     /** Requirement "Order status update" for managers. */
     @PatchMapping("/management/orders/{number}/status")
     public OrderResponse changeStatus(@PathVariable String number,
-                                      @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                       @Valid @RequestBody StatusChangeRequest request) {
-        Actor manager = currentUser.requireStaff(userId);
+        Actor manager = currentUser.requireStaff();
         Order order = orderQueries.getByNumber(number);
         return OrderResponse.of(orderService.changeStatus(order.id(), request.status(), manager, request.trackingNumber()));
     }

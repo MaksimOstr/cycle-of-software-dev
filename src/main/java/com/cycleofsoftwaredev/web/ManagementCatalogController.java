@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -84,50 +83,44 @@ public class ManagementCatalogController {
 
     @PostMapping("/categories")
     @ResponseStatus(HttpStatus.CREATED)
-    public CategoryResponse createCategory(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                   @Valid @RequestBody CategoryRequest request) {
-        currentUser.requireStaff(userId);
+    public CategoryResponse createCategory(@Valid @RequestBody CategoryRequest request) {
+        currentUser.requireStaff();
         return CategoryResponse.of(categories.createCategory(request.name(), request.parentId()));
     }
 
     @PutMapping("/categories/{categoryId}")
     public CategoryResponse renameCategory(@PathVariable UUID categoryId,
-                                   @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                   @Valid @RequestBody CategoryNameRequest request) {
-        currentUser.requireStaff(userId);
+                                           @Valid @RequestBody CategoryNameRequest request) {
+        currentUser.requireStaff();
         return CategoryResponse.of(categories.renameCategory(categoryId, request.name()));
     }
 
     @DeleteMapping("/categories/{categoryId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCategory(@PathVariable UUID categoryId,
-                               @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        currentUser.requireStaff(userId);
+    public void deleteCategory(@PathVariable UUID categoryId) {
+        currentUser.requireStaff();
         categories.deleteCategory(categoryId);
     }
 
     /** All products including hidden ones. */
     @GetMapping("/products")
-    public List<ProductResponse> allProducts(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        currentUser.requireStaff(userId);
+    public List<ProductResponse> allProducts() {
+        currentUser.requireStaff();
         return products.allProducts().stream().map(assembler::toResponse).toList();
     }
 
     @PostMapping("/products")
     @ResponseStatus(HttpStatus.CREATED)
-    public ProductResponse createProduct(
-            @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-            @Valid @RequestBody ProductRequest request) {
-        currentUser.requireStaff(userId);
+    public ProductResponse createProduct(@Valid @RequestBody ProductRequest request) {
+        currentUser.requireStaff();
         return assembler.toResponse(products.createProduct(request.name(), request.description(), request.categoryId()));
     }
 
     @PutMapping("/products/{productId}")
     public ProductResponse updateProduct(
             @PathVariable UUID productId,
-            @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
             @Valid @RequestBody ProductRequest request) {
-        currentUser.requireStaff(userId);
+        currentUser.requireStaff();
         return assembler.toResponse(
                 products.updateProduct(productId, request.name(), request.description(), request.categoryId()));
     }
@@ -136,17 +129,15 @@ public class ManagementCatalogController {
     @PatchMapping("/products/{productId}/visibility")
     public ProductResponse setVisibility(
             @PathVariable UUID productId,
-            @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
             @Valid @RequestBody VisibilityRequest request) {
-        currentUser.requireStaff(userId);
+        currentUser.requireStaff();
         return assembler.toResponse(products.setVisible(productId, request.visible()));
     }
 
     @DeleteMapping("/products/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteProduct(@PathVariable UUID productId,
-                              @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        currentUser.requireStaff(userId);
+    public void deleteProduct(@PathVariable UUID productId) {
+        currentUser.requireStaff();
         products.deleteProduct(productId);
     }
 
@@ -154,27 +145,24 @@ public class ManagementCatalogController {
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse addVariant(
             @PathVariable UUID productId,
-            @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
             @Valid @RequestBody VariantRequest request) {
-        currentUser.requireStaff(userId);
+        currentUser.requireStaff();
         products.addVariant(productId, request.sku(), request.name(), Money.of(request.price()));
         return assembler.toResponse(products.getProduct(productId));
     }
 
     @PutMapping("/stock/{variantId}")
     public StockResponse setStock(@PathVariable UUID variantId,
-                                  @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                   @Valid @RequestBody StockRequest request) {
-        currentUser.requireStaff(userId);
+        currentUser.requireStaff();
         StockItem item = inventory.setStock(variantId, request.onHand());
         return new StockResponse(item.variantId(), item.onHand(), item.reserved(), item.available(), item.isLowStock());
     }
 
     @PostMapping("/promo-codes")
     @ResponseStatus(HttpStatus.CREATED)
-    public PromoCodeResponse createPromoCode(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                             @Valid @RequestBody PromoCodeRequest request) {
-        currentUser.requireStaff(userId);
+    public PromoCodeResponse createPromoCode(@Valid @RequestBody PromoCodeRequest request) {
+        currentUser.requireStaff();
         PromoCode promoCode = promoCodes.createPromoCode(request.code(), request.discountPercent(),
                 request.validUntil(), request.usageLimit());
         return new PromoCodeResponse(promoCode.code(), promoCode.discountPercent(), promoCode.usedCount());

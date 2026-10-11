@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -56,17 +55,15 @@ public class ReviewController {
     @PostMapping("/products/{productId}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
     public ReviewResponse write(@PathVariable UUID productId,
-                                @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                 @Valid @RequestBody ReviewRequest request) {
-        Actor customer = currentUser.requireUser(userId);
+        Actor customer = currentUser.requireUser();
         return ReviewResponse.of(reviews.writeReview(productId, customer.userId(), request.rating(), request.text()));
     }
 
     @PatchMapping("/management/reviews/{reviewId}")
     public ReviewResponse moderate(@PathVariable UUID reviewId,
-                                   @RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
                                    @RequestBody ModerationRequest request) {
-        currentUser.requireStaff(userId);
+        currentUser.requireStaff();
         return ReviewResponse.of(reviews.moderate(reviewId, request.approved()));
     }
 }

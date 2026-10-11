@@ -1,5 +1,5 @@
 # Databases only (the application is started from the IDE or with ./gradlew bootRun):
-#     docker compose up -d postgres
+#     docker compose up -d postgres redis
 # The whole system in containers:
 #     docker compose up --build -d
 services:
@@ -23,6 +23,19 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # refresh tokens and the counters of login attempts: short-lived data with an expiry time
+  redis:
+    image: redis:8
+    container_name: shopsphere-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   shopsphere:
     build: .
     image: shopsphere:latest
@@ -30,12 +43,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${SHOPSPHERE_PORT:-8080}:8080"
     environment:
       SHOPSPHERE_DB_URL: jdbc:postgresql://postgres:5432/shopsphere
       SHOPSPHERE_DB_USER: shopsphere
       SHOPSPHERE_DB_PASSWORD: ${POSTGRES_PASSWORD:-shopsphere}
+      SHOPSPHERE_REDIS_HOST: redis
+      # signing key of the access tokens: a development placeholder unless SHOPSPHERE_JWT_SECRET is set in .env
+      SHOPSPHERE_JWT_SECRET: ${SHOPSPHERE_JWT_SECRET:-shopsphere-local-development-jwt-secret-change-me}
       # demo users, catalog and stock are loaded at startup
       SHOPSPHERE_DEMO_DATA_ENABLED: "true"
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"

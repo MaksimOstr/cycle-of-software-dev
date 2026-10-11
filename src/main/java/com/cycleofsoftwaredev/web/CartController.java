@@ -2,6 +2,7 @@ package com.cycleofsoftwaredev.web;
 
 import com.cycleofsoftwaredev.cart.api.CartSnapshot;
 import com.cycleofsoftwaredev.cart.application.CartService;
+import com.cycleofsoftwaredev.shared.domain.Actor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,8 +44,8 @@ public class CartController {
     /** Creates a cart for a guest (no header) or for the signed-in customer. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CartSnapshot create(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        UUID customerId = userId == null ? null : currentUser.requireUser(userId).userId();
+    public CartSnapshot create() {
+        UUID customerId = currentUser.optionalUser().map(Actor::userId).orElse(null);
         return carts.createCart(customerId);
     }
 

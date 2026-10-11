@@ -12,11 +12,9 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,31 +43,28 @@ public class AdministrationController {
     }
 
     @GetMapping("/settings/delivery")
-    public DeliverySettings deliverySettings(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId) {
-        currentUser.requireAdministrator(userId);
+    public DeliverySettings deliverySettings() {
+        currentUser.requireAdministrator();
         return settings.deliverySettings();
     }
 
     @PutMapping("/settings/delivery")
-    public DeliverySettings updateDeliverySettings(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                                   @Valid @RequestBody DeliverySettingsRequest request) {
-        currentUser.requireAdministrator(userId);
+    public DeliverySettings updateDeliverySettings(@Valid @RequestBody DeliverySettingsRequest request) {
+        currentUser.requireAdministrator();
         settings.updateDeliverySettings(new DeliverySettings(Money.of(request.courierPrice()),
                 Money.of(request.novaPoshtaPrice()), Money.of(request.freeShippingThreshold())));
         return settings.deliverySettings();
     }
 
     @GetMapping("/audit-log")
-    public List<AuditEntryResponse> auditLog(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                                     @RequestParam(defaultValue = "50") int limit) {
-        currentUser.requireAdministrator(userId);
+    public List<AuditEntryResponse> auditLog(@RequestParam(defaultValue = "50") int limit) {
+        currentUser.requireAdministrator();
         return auditLog.latestEntries(limit).stream().map(AuditEntryResponse::of).toList();
     }
 
     @GetMapping("/sales")
-    public SalesReport sales(@RequestHeader(value = CurrentUserResolver.HEADER, required = false) UUID userId,
-                             @RequestParam Instant from, @RequestParam Instant to) {
-        currentUser.requireAdministrator(userId);
+    public SalesReport sales(@RequestParam Instant from, @RequestParam Instant to) {
+        currentUser.requireAdministrator();
         return salesReports.report(from, to);
     }
 }
