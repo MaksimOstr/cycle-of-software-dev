@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -14,6 +15,8 @@ import com.cycleofsoftwaredev.identity.api.Role;
 import com.cycleofsoftwaredev.identity.api.UserView;
 import com.cycleofsoftwaredev.identity.application.RegisterUserCommand;
 import com.cycleofsoftwaredev.identity.application.RegistrationService;
+import com.cycleofsoftwaredev.reviews.domain.Review;
+import com.cycleofsoftwaredev.reviews.domain.ReviewRepository;
 import com.cycleofsoftwaredev.support.TestInfrastructure;
 import com.cycleofsoftwaredev.web.security.TokenService;
 import com.jayway.jsonpath.JsonPath;
@@ -53,6 +56,9 @@ class ApiContractTest {
 
     @Autowired
     private TokenService tokens;
+
+    @Autowired
+    private ReviewRepository reviews;
 
     private String suffix;
     private String manager;
@@ -228,6 +234,34 @@ class ApiContractTest {
                 .andExpect(jsonPath("$.usedCount").value(0));
         expectError(json(post("/api/v1/management/promo-codes"), promoCode.formatted(20, tomorrow, 5)).header(AUTH, manager),
                 409, "BUSINESS_RULE_VIOLATED");
+    }
+
+    /** Requirement "Review moderation": a review is approved or rejected only by an explicit decision. */
+    @Test
+    void reviewIsModeratedOnlyByAnExplicitDecision() throws Exception {
+        Review review = reviews.save(new Review(UUID.randomUUID(), UUID.fromString(productId), UUID.randomUUID(), 5,
+                "Bright", Instant.now().truncatedTo(ChronoUnit.SECONDS)));
+        String moderation = "/api/v1/management/reviews/" + review.id();
+
+        expectError(json(patch(moderation), "{}").header(AUTH, manager), 400, "VALIDATION_FAILED")
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("approved"));
+        expectError(json(patch(moderation), "{\"approved\":true}").header(AUTH, customer), 403, "FORBIDDEN");
+        mvc.perform(get("/api/v1/products/" + productId + "/reviews")).andExpect(jsonPath("$.length()").value(0));
+
+        mvc.perform(json(patch(moderation), "{\"approved\":true}").header(AUTH, manager))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(review.id().toString()))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+        mvc.perform(get("/api/v1/products/" + productId + "/reviews"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].rating").value(5))
+                .andExpect(jsonPath("$[0].text").value("Bright"))
+                .andExpect(jsonPath("$[0].productId").value(productId))
+                .andExpect(jsonPath("$[0].createdAt").exists())
+                .andExpect(jsonPath("$[0].customerId").doesNotExist());
+        expectError(json(patch(moderation), "{\"approved\":false}").header(AUTH, manager), 409, "BUSINESS_RULE_VIOLATED");
+        expectError(json(patch("/api/v1/management/reviews/" + UUID.randomUUID()), "{\"approved\":true}").header(AUTH, manager),
+                404, "NOT_FOUND");
     }
 
     @Test
