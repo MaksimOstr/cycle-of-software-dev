@@ -1,14 +1,18 @@
 package com.cycleofsoftwaredev.ordering;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cycleofsoftwaredev.ordering.api.OrderStatus;
 import com.cycleofsoftwaredev.ordering.application.CheckoutResult;
 import com.cycleofsoftwaredev.ordering.domain.Order;
 import com.cycleofsoftwaredev.ordering.domain.PaymentMethod;
 import com.cycleofsoftwaredev.payment.api.PaymentSession;
+import com.cycleofsoftwaredev.payment.api.PaymentSucceeded;
 import com.cycleofsoftwaredev.payment.application.PaymentWebhookEvent;
 import com.cycleofsoftwaredev.shared.domain.Actor;
+import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
+import com.cycleofsoftwaredev.shared.domain.NotFoundException;
 import com.cycleofsoftwaredev.support.ShopFixture;
 import java.time.Duration;
 import java.util.UUID;
@@ -133,5 +137,102 @@ class OrderServiceTest {
 
         assertThat(summary.ordersCount()).isEqualTo(1);
         assertThat(summary.revenue()).isEqualTo(paid.total());
+    }
+
+    @Test
+    void managerCancelsUnpaidOrderThroughTheStatusUpdate() {
+        CheckoutResult result = placeCardOrder();
+
+        Order order = shop.orders.changeStatus(result.orderId(), OrderStatus.CANCELLED, manager, null);
+
+        assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(onHand()).isEqualTo(5);
+        assertThat(shop.paymentProvider.expiredSessions()).hasSize(1);
+        assertThat(shop.paymentProvider.refundedSessions()).isEmpty();
+    }
+
+    @Test
+    void statusesSetByTheSystemCannotBeSetByAManager() {
+        CheckoutResult result = placeCardOrder();
+
+        assertThatThrownBy(() -> shop.orders.changeStatus(result.orderId(), OrderStatus.PAID, manager, null))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> shop.orders.changeStatus(result.orderId(), OrderStatus.NEW, manager, null))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThat(shop.orderQueries.getByNumber(result.orderNumber()).status()).isEqualTo(OrderStatus.NEW);
+    }
+
+    @Test
+    void cashOrderIsNeverCancelledForNonPayment() {
+        CheckoutResult result = shop.checkout.placeOrder(
+                shop.order(shop.cartWith(hoodie, 1), PaymentMethod.CASH_ON_DELIVERY), "cash-2");
+
+        shop.clock.advance(Duration.ofDays(2));
+        shop.orders.expireUnpaidOrders();
+
+        assertThat(shop.orderQueries.getByNumber(result.orderNumber()).status()).isEqualTo(OrderStatus.NEW);
+        assertThat(onHand()).isEqualTo(4);
+    }
+
+    @Test
+    void cancelledCashOrderThatWasBeingProcessedReturnsGoodsToStock() {
+        CheckoutResult result = shop.checkout.placeOrder(
+                shop.order(shop.cartWith(hoodie, 2), PaymentMethod.CASH_ON_DELIVERY), "cash-3");
+        shop.orders.changeStatus(result.orderId(), OrderStatus.PROCESSING, manager, null);
+
+        shop.orders.cancelOrder(result.orderId(), Actor.customer(shop.customerId), "changed my mind");
+
+        assertThat(onHand()).isEqualTo(5);
+        assertThat(shop.paymentProvider.refundedSessions()).isEmpty();
+    }
+
+    @Test
+    void returnedCashOrderIsRestockedWithoutARefund() {
+        CheckoutResult result = shop.checkout.placeOrder(
+                shop.order(shop.cartWith(hoodie, 1), PaymentMethod.CASH_ON_DELIVERY), "cash-4");
+        shop.orders.changeStatus(result.orderId(), OrderStatus.PROCESSING, manager, null);
+        shop.orders.changeStatus(result.orderId(), OrderStatus.SHIPPED, manager, "123");
+        shop.orders.changeStatus(result.orderId(), OrderStatus.DELIVERED, manager, null);
+
+        shop.orders.changeStatus(result.orderId(), OrderStatus.RETURNED, manager, null);
+
+        assertThat(onHand()).isEqualTo(5);
+        assertThat(shop.paymentProvider.refundedSessions()).isEmpty();
+        assertThat(shop.orderQueries.hasReceivedProduct(shop.customerId, shop.productOf(hoodie))).isFalse();
+    }
+
+    @Test
+    void returnIsRefusedAfterFourteenDays() {
+        CheckoutResult result = placeCardOrder();
+        pay(result, "evt_1");
+        shop.orders.changeStatus(result.orderId(), OrderStatus.PROCESSING, manager, null);
+        shop.orders.changeStatus(result.orderId(), OrderStatus.SHIPPED, manager, "123");
+        shop.orders.changeStatus(result.orderId(), OrderStatus.DELIVERED, manager, null);
+        shop.clock.advance(Duration.ofDays(14));
+
+        assertThatThrownBy(() -> shop.orders.changeStatus(result.orderId(), OrderStatus.RETURNED, manager, null))
+                .isInstanceOf(BusinessRuleException.class);
+        assertThat(onHand()).isEqualTo(3);
+        assertThat(shop.paymentProvider.refundedSessions()).isEmpty();
+    }
+
+    @Test
+    void paymentNotificationForAnOrderInProcessingChangesNothing() {
+        CheckoutResult result = placeCardOrder();
+        pay(result, "evt_1");
+        shop.orders.changeStatus(result.orderId(), OrderStatus.PROCESSING, manager, null);
+
+        shop.orders.onPaymentSucceeded(new PaymentSucceeded(result.orderId(), UUID.randomUUID(), shop.clock.instant()));
+
+        assertThat(shop.orderQueries.getByNumber(result.orderNumber()).status()).isEqualTo(OrderStatus.PROCESSING);
+        assertThat(onHand()).isEqualTo(3);
+        assertThat(shop.paymentProvider.refundedSessions()).isEmpty();
+    }
+
+    @Test
+    void unknownOrderIsNotFound() {
+        assertThatThrownBy(() -> shop.orders.changeStatus(UUID.randomUUID(), OrderStatus.PROCESSING, manager, null))
+                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> shop.orderQueries.getByNumber("SS-000000-00000")).isInstanceOf(NotFoundException.class);
     }
 }

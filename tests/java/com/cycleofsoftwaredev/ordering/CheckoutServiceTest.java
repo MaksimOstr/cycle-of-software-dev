@@ -9,6 +9,7 @@ import com.cycleofsoftwaredev.ordering.api.OrderStatus;
 import com.cycleofsoftwaredev.ordering.application.CheckoutResult;
 import com.cycleofsoftwaredev.ordering.domain.Order;
 import com.cycleofsoftwaredev.ordering.domain.PaymentMethod;
+import com.cycleofsoftwaredev.payment.application.PaymentWebhookEvent;
 import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import com.cycleofsoftwaredev.support.ShopFixture;
@@ -83,5 +84,65 @@ class CheckoutServiceTest {
         assertThatThrownBy(() -> shop.checkout.placeOrder(shop.order(secondCart, PaymentMethod.CARD_ONLINE), "key-5"))
                 .isInstanceOf(OutOfStockException.class);
         assertThat(shop.orderRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void idempotencyKeyIsRequired() {
+        UUID hoodie = shop.variant("HOOD-M", "1000", 5);
+        UUID cartId = shop.cartWith(hoodie, 1);
+
+        assertThatThrownBy(() -> shop.checkout.placeOrder(shop.order(cartId, PaymentMethod.CARD_ONLINE), " "))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> shop.checkout.placeOrder(shop.order(cartId, PaymentMethod.CARD_ONLINE), null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(shop.inventory.availableQuantity(hoodie)).isEqualTo(5);
+    }
+
+    @Test
+    void repeatedRequestAfterThePaymentReturnsThePaidOrderWithoutAPaymentLink() {
+        UUID hoodie = shop.variant("HOOD-M", "1000", 5);
+        UUID cartId = shop.cartWith(hoodie, 1);
+        CheckoutResult first = shop.checkout.placeOrder(shop.order(cartId, PaymentMethod.CARD_ONLINE), "key-6");
+        String sessionId = shop.payments.findSession(first.orderId()).orElseThrow().sessionId();
+        shop.payments.handleWebhook(new PaymentWebhookEvent("evt_1", PaymentWebhookEvent.CHECKOUT_COMPLETED, sessionId));
+
+        CheckoutResult repeated = shop.checkout.placeOrder(shop.order(cartId, PaymentMethod.CARD_ONLINE), "key-6");
+
+        assertThat(repeated.orderNumber()).isEqualTo(first.orderNumber());
+        assertThat(repeated.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(repeated.paymentUrl()).isNull();
+    }
+
+    @Test
+    void orderKeepsThePricesAndNamesOfTheMomentOfCheckout() {
+        UUID hoodie = shop.variant("HOOD-M", "1000", 5);
+        UUID mug = shop.variant("MUG", "250.50", 5);
+        UUID cartId = shop.cartWith(hoodie, 2);
+        shop.carts.addItem(cartId, mug, 3);
+
+        CheckoutResult result = shop.checkout.placeOrder(shop.order(cartId, PaymentMethod.CASH_ON_DELIVERY), "key-7");
+        shop.products.deleteProduct(shop.productOf(hoodie));
+
+        Order order = shop.orderQueries.getByNumber(result.orderNumber());
+        assertThat(order.items()).extracting(item -> item.sku() + " x" + item.quantity() + " = " + item.lineTotal().amount())
+                .containsExactly("HOOD-M x2 = 2000.00", "MUG x3 = 751.50");
+        assertThat(order.subtotal()).isEqualTo(Money.of("2751.50"));
+        assertThat(order.total()).isEqualTo(Money.of("2751.50")); // delivery is free above 2000
+    }
+
+    @Test
+    void severalItemsOfTheOrderAreReservedTogetherOrNotAtAll() {
+        UUID hoodie = shop.variant("HOOD-M", "1000", 5);
+        UUID mug = shop.variant("MUG", "250", 2);
+        UUID cartId = shop.cartWith(hoodie, 2);
+        shop.carts.addItem(cartId, mug, 2);
+        UUID otherCart = shop.cartWith(mug, 1);
+        shop.checkout.placeOrder(shop.order(otherCart, PaymentMethod.CASH_ON_DELIVERY), "key-8");
+
+        assertThatThrownBy(() -> shop.checkout.placeOrder(shop.order(cartId, PaymentMethod.CASH_ON_DELIVERY), "key-9"))
+                .isInstanceOf(OutOfStockException.class);
+        assertThat(shop.inventory.availableQuantity(hoodie)).isEqualTo(5);
+        assertThat(shop.inventory.availableQuantity(mug)).isEqualTo(1);
+        assertThat(shop.carts.getSnapshot(cartId).lines()).hasSize(2);
     }
 }

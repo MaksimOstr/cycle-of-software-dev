@@ -50,4 +50,25 @@ class DeliveryServiceTest {
         assertThatThrownBy(() -> delivery.calculateCost(DeliveryMethod.NOVA_POSHTA, Money.of("10")))
                 .isInstanceOf(BusinessRuleException.class);
     }
+
+    @Test
+    void twoPoliciesForOneDeliveryMethodAreAConfigurationError() {
+        assertThatThrownBy(() -> new DeliveryService(List.of(new CourierCostPolicy(settings), new CourierCostPolicy(settings))))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void offersTheMethodsThatHaveACostPolicy() {
+        DeliveryService delivery = new DeliveryService(List.of(new CourierCostPolicy(settings), new StorePickupCostPolicy()));
+
+        assertThat(delivery.availableMethods()).containsExactlyInAnyOrder(DeliveryMethod.COURIER, DeliveryMethod.STORE_PICKUP);
+    }
+
+    @Test
+    void deliveryBecomesFreeExactlyAtTheThreshold() {
+        DeliveryService delivery = new DeliveryService(List.of(new CourierCostPolicy(settings)));
+
+        assertThat(delivery.calculateCost(DeliveryMethod.COURIER, Money.of("1999.99"))).isEqualTo(Money.of("120"));
+        assertThat(delivery.calculateCost(DeliveryMethod.COURIER, Money.of("2000.00"))).isEqualTo(Money.zero());
+    }
 }

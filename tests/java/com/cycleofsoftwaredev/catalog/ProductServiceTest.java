@@ -193,4 +193,22 @@ class ProductServiceTest {
             products.addVariant(product.id(), name + "-" + price, price, Money.of(price));
         }
     }
+
+    @Test
+    void pageNumberAndSizeAreChecked() {
+        assertThatThrownBy(() -> products.searchPage(null, null, ProductSort.NAME, 0, 24))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> products.searchPage(null, null, ProductSort.NAME, 1, 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> products.searchPage(null, null, ProductSort.NAME, 1, ProductPage.MAX_SIZE + 1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(products.searchPage(null, null, ProductSort.NAME, Integer.MAX_VALUE, ProductPage.MAX_SIZE).items()).isEmpty();
+    }
+
+    @Test
+    void numberOfPagesIsRoundedUp() {
+        assertThat(new ProductPage(List.of(), 1, 24, 0).totalPages()).isZero();
+        assertThat(new ProductPage(List.of(), 1, 24, 24).totalPages()).isEqualTo(1);
+        assertThat(new ProductPage(List.of(), 1, 24, 25).totalPages()).isEqualTo(2);
+    }
 }
