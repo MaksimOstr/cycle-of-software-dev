@@ -33,6 +33,8 @@ class ProductTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> hoodie.update(null, "", categoryId)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> hoodie.update("Hoodie", "", null)).isInstanceOf(NullPointerException.class);
+        // a rejected change leaves the product as it was
+        assertThat(hoodie.name()).isEqualTo("Basic Hoodie");
     }
 
     @Test
