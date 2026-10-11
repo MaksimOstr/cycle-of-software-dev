@@ -43,8 +43,9 @@ public class ShopFixture {
     public final MutableClock clock = new MutableClock(Instant.parse("2026-10-05T10:00:00Z"));
     public final RecordingEventPublisher events = new RecordingEventPublisher();
 
-    public final CategoryService categories = new CategoryService(new InMemoryCategoryRepository());
-    public final ProductService products = new ProductService(new InMemoryProductRepository(), categories);
+    private final InMemoryProductRepository productRepository = new InMemoryProductRepository();
+    public final CategoryService categories = new CategoryService(new InMemoryCategoryRepository(), productRepository);
+    public final ProductService products = new ProductService(productRepository, categories);
     public final InventoryService inventory =
             new InventoryService(new InMemoryStockRepository(), new InMemoryReservationRepository());
 

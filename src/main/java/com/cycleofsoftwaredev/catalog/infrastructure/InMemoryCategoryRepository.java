@@ -30,4 +30,9 @@ public class InMemoryCategoryRepository implements CategoryRepository {
     public List<Category> findAll() {
         return List.copyOf(categories.values());
     }
+
+    @Override
+    public void delete(UUID id) {
+        categories.remove(id);
+    }
 }

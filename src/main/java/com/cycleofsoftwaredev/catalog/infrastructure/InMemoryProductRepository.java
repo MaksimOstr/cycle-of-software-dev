@@ -37,4 +37,9 @@ public class InMemoryProductRepository implements ProductRepository {
     public List<Product> findAll() {
         return List.copyOf(products.values());
     }
+
+    @Override
+    public void delete(UUID id) {
+        products.remove(id);
+    }
 }
