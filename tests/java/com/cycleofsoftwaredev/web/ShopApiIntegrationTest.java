@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.cycleofsoftwaredev.identity.api.PasswordResetRequested;
 import com.cycleofsoftwaredev.identity.api.Role;
 import com.cycleofsoftwaredev.identity.api.UserView;
 import com.cycleofsoftwaredev.identity.application.RegisterUserCommand;
@@ -21,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -28,12 +31,16 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 /** End-to-end scenario through the REST API: catalog, cart, checkout, payment webhook, order management. */
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc
+@RecordApplicationEvents
 class ShopApiIntegrationTest {
 
     private static final String USER = CurrentUserResolver.HEADER;
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private ApplicationEvents applicationEvents;
 
     @Autowired
     private RegistrationService registration;
@@ -217,6 +224,44 @@ class ShopApiIntegrationTest {
                 .andExpect(jsonPath("$.email").value(email));
         mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + email + "\",\"password\":\"wrong1234\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void forgottenPasswordIsResetWithTheCodeFromEmail() throws Exception {
+        String email = customer.email();
+        mvc.perform(json(post("/api/v1/auth/password-reset"), "{\"email\":\"unknown@example.com\"}"))
+                .andExpect(status().isAccepted());
+        mvc.perform(json(post("/api/v1/auth/password-reset"), "{\"email\":\"" + email + "\"}"))
+                .andExpect(status().isAccepted());
+        String token = applicationEvents.stream(PasswordResetRequested.class)
+                .filter(event -> event.email().equals(email)).findFirst().orElseThrow().token();
+
+        mvc.perform(json(post("/api/v1/auth/password-reset/confirm"), "{\"token\":\"" + token + "\",\"newPassword\":\"weak\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(json(post("/api/v1/auth/password-reset/confirm"),
+                        "{\"token\":\"" + token + "\",\"newPassword\":\"Changed12345\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(json(post("/api/v1/auth/password-reset/confirm"),
+                        "{\"token\":\"" + token + "\",\"newPassword\":\"Another12345\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATED"));
+
+        mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + email + "\",\"password\":\"Customer123\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + email + "\",\"password\":\"Changed12345\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void accountIsLockedAfterFiveFailedLogins() throws Exception {
+        String wrong = "{\"email\":\"" + customer.email() + "\",\"password\":\"wrong1234\"}";
+        for (int attempt = 0; attempt < 5; attempt++) {
+            mvc.perform(json(post("/api/v1/auth/login"), wrong)).andExpect(status().isUnauthorized());
+        }
+
+        mvc.perform(json(post("/api/v1/auth/login"), "{\"email\":\"" + customer.email() + "\",\"password\":\"Customer123\"}"))
+                .andExpect(status().isLocked())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
     }
 
     private String createProductInStock(String sku, String price, int quantity) throws Exception {

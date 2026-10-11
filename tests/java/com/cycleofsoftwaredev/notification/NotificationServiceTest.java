@@ -2,10 +2,12 @@ package com.cycleofsoftwaredev.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.cycleofsoftwaredev.identity.api.PasswordResetRequested;
 import com.cycleofsoftwaredev.identity.api.UserRegistered;
 import com.cycleofsoftwaredev.notification.application.NotificationService;
 import com.cycleofsoftwaredev.notification.application.OrderCreatedEmailComposer;
 import com.cycleofsoftwaredev.notification.application.OrderStatusEmailComposer;
+import com.cycleofsoftwaredev.notification.application.PasswordResetEmailComposer;
 import com.cycleofsoftwaredev.notification.application.WelcomeEmailComposer;
 import com.cycleofsoftwaredev.notification.domain.EmailMessage;
 import com.cycleofsoftwaredev.ordering.api.OrderPlaced;
@@ -45,6 +47,20 @@ class NotificationServiceTest {
         notifications.onEvent(new UserRegistered(UUID.randomUUID(), "ivan@example.com", "Ivan", NOW));
 
         assertThat(sent).singleElement().extracting(EmailMessage::subject).isEqualTo("Welcome to ShopSphere");
+    }
+
+    @Test
+    void sendsPasswordResetCodeToTheUser() {
+        NotificationService withReset = new NotificationService(List.of(new PasswordResetEmailComposer()), sent::add);
+
+        withReset.onEvent(new PasswordResetRequested(UUID.randomUUID(), "ivan@example.com", "reset-code-1",
+                NOW.plusSeconds(3600), NOW));
+
+        assertThat(sent).singleElement().satisfies(email -> {
+            assertThat(email.to()).isEqualTo("ivan@example.com");
+            assertThat(email.subject()).isEqualTo("ShopSphere password reset");
+            assertThat(email.body()).contains("reset-code-1").contains("1 hour");
+        });
     }
 
     @Test

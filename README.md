@@ -198,7 +198,8 @@ Emails are written to the application log (`EMAIL to=...`).
 
 | Method and path | Description | Access |
 |-----------------|-------------|--------|
-| `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Registration and login | everyone |
+| `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Registration and login; the account is locked for 15 minutes after 5 failed logins | everyone |
+| `POST /api/v1/auth/password-reset`, `POST /api/v1/auth/password-reset/confirm` | Password recovery: a code is sent by email, is valid for 1 hour and works once | everyone |
 | `GET /api/v1/categories`, `GET /api/v1/products?query=&categoryId=`, `GET /api/v1/products/{id}` | Catalog | everyone |
 | `POST /api/v1/carts`, `GET /api/v1/carts/{id}`, `POST/PUT/DELETE /api/v1/carts/{id}/items[/{variantId}]`, `POST /api/v1/carts/{id}/promo-code` | Cart | everyone |
 | `POST /api/v1/orders` (header `Idempotency-Key`) | Checkout | everyone |
@@ -219,6 +220,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | 404 | `NOT_FOUND` | entity or path does not exist |
 | 405 / 415 | `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | wrong HTTP method / body is not JSON |
 | 409 | `BUSINESS_RULE_VIOLATED` | a business rule is violated, for example "Only 1 item(s) left" |
+| 423 | `ACCOUNT_LOCKED` | too many failed login attempts |
 | 500 | `INTERNAL_ERROR` | unexpected error; details are written only to the log |
 
 ### Tests
@@ -226,7 +228,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | Test | What it checks |
 |------|----------------|
 | `MoneyTest`, `OrderTest` | Value object arithmetic; every transition of the order state machine (Lab 2, Figure 8) |
-| `RegistrationServiceTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
+| `RegistrationServiceTest`, `AccountSecurityTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
 | `CheckoutServiceTest`, `OrderServiceTest` | Checkout and payment scenarios of Lab 2, Figures 6 and 7: idempotency, stock reservation, unpaid order expiry, late payment refund, cancellation, return |
 | `DeliveryCostPolicyContractTest` | Liskov substitution contract of all delivery cost policies |
 | `ModuleBoundariesTest` | Module boundaries and dependency rules of the architecture |
