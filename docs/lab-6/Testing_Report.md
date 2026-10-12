@@ -51,13 +51,13 @@ Before this lab the project had 138 tests (103 unit, 31 component, 4 system).
 
 | Counter | Before the lab | After the lab |
 |---------|---------------:|--------------:|
-| Lines | 94.5% (1688 of 1787) | 97.5% (1748 of 1793) |
+| Lines | 94.5% (1688 of 1787) | 98.3% (1762 of 1793) |
 | Branches | 78.1% (414 of 530) | 93.5% (501 of 536) |
-| Methods | 93.8% | 97.5% |
+| Methods | 93.8% | 97.8% |
 
 The Postman collection (54 requests, 91 checks) was run with Newman against the containers started by
-`docker compose up --build` during this lab: all 91 checks passed. It was run on the code before the fixes of
-defects 4–6 of section 4, so it has to be repeated before the final demonstration.
+`docker compose up --build`. It was repeated on the final code, after the fixes of all six defects of section 4:
+all 91 checks passed.
 
 ### 2.1 Unit testing
 
@@ -137,7 +137,7 @@ were not fully met, and both were fixed:
 | Server response time (95% within 500 ms, 1,000 users) | Partial | Partial | met on one user and 5,000 products; 1,000 concurrent users were not tested |
 | Order and payment integrity | Met | Met | confirmed on the real database: `CheckoutTransactionTest`, `OrderStorageTest`, `PaymentStorageTest` |
 | Password storage, role-based access, protection from attacks | Met | Met | `PasswordRulesTest`, `AccountStorageTest`, `RedisSecurityStorageTest`, `ApiContractTest` |
-| Test coverage 70% | Met (94.5%) | Met (97.5%) | JaCoCo |
+| Test coverage 70% | Met (94.5%) | Met (98.3%) | JaCoCo |
 
 The other non-functional requirements keep their status: the requirements of sections 4.5 and 4.6 belong to the
 storefront that is not implemented, availability and backups need a production environment.
@@ -184,7 +184,7 @@ product filters, images, wishlist, report export.
 
 ## 6. Conclusions
 
-- 386 automated tests of three levels pass; they cover 97.5% of the lines and 93.5% of the branches of the
+- 386 automated tests of three levels pass; they cover 98.3% of the lines and 93.5% of the branches of the
   server code.
 - The server part meets the functional requirements that are marked as Done; six defects found by the tests are
   fixed, two of them were deviations from the specification.
