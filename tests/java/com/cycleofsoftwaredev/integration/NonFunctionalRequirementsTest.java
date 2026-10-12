@@ -196,7 +196,9 @@ class NonFunctionalRequirementsTest {
         }
 
         reporter.publishEntry("slowest search on 100,000 products, ms", Long.toString(slowest.toMillis()));
-        mvc.perform(get("/api/v1/products").param("query", "item").param("sort", "PRICE_ASC"))
+        // the database is shared with the other test classes, so only the products of this category are counted
+        mvc.perform(get("/api/v1/products").param("query", "item").param("sort", "PRICE_ASC")
+                        .param("categoryId", category.id().toString()))
                 .andExpect(jsonPath("$.totalItems").value(LARGE_CATALOG_SIZE))
                 .andExpect(jsonPath("$.items.length()").value(24));
         assertThat(slowest).isLessThan(SEARCH_TIME_LIMIT);
