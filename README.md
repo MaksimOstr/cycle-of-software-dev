@@ -13,6 +13,7 @@ The project is developed during the "Software Development Life Cycle" laboratory
 | 3 | Agile process in Jira: backlog, Sprint 1, estimates, assignment | [`docs/lab-3`](docs/lab-3) |
 | 4 | Basic code structure: modules, classes and functions following SOLID | this repository (`src`, `tests`) |
 | 5 | Integration of the components and dependency management: completed features, integration tests, Docker, CI, requirements fulfillment | [Integration](#integration-of-the-system-laboratory-work-5), [Requirements fulfillment](#requirements-fulfillment), [`docs/lab-5`](docs/lab-5) |
+| 6 | Testing and validation: unit, component and system tests, validation against the requirements, defects found, recommendations | [Testing report](docs/lab-6/Testing_Report.md), [Tests](#tests), `tests` |
 
 ## Technology stack
 
@@ -82,7 +83,8 @@ uniform error format, JWT authentication (`web.security`) and role checks.
                     db/changelog: Liquibase changelog, schema changes in SQL
 /tests/java         unit, architecture and integration tests (Gradle test source set)
 /docs               documentation of laboratory works 1–3 (specification, architecture, Agile process),
-                    Postman collection of laboratory work 5
+                    Postman collection of laboratory work 5,
+                    testing report of laboratory work 6
 README.md           this file
 .gitignore          files excluded from Git (build output, IDE settings, logs)
 build.gradle        build configuration and dependencies
@@ -430,13 +432,16 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | `ApiContractTest` | Contract of the REST API: HTTP status and JSON format of the catalog, cart, checkout, management and administration endpoints; 400, 401, 403, 404, 409 and 415 answers in the uniform error format |
 | `DatabaseSchemaTest` | Liquibase changelog on an empty database: every change is applied, one schema per module, indexes of the lookups |
 | `ProductSearchPostgresTest` | Catalog search executed by PostgreSQL: text in name and description, category with subcategories, sorting, paging, special characters |
+| `UserScenariosSystemTest` | System tests of user scenarios through the REST API: a guest pays by card and tracks the order by email; a customer recovers a forgotten password; the manager takes an order back and the administrator sees it in the sales report; a hidden product and the last items cannot be bought twice |
 | `SystemIntegrationTest` | Integration of all modules: a cash order from catalog to review and a card order with payment, cancellation and refund; emails, sales report and audit log |
-| `NonFunctionalRequirementsTest` | 95% of catalog, search and cart responses within 500 ms on 5,000 products; 20 simultaneous orders for 5 items create exactly 5 orders |
+| `NonFunctionalRequirementsTest` | 95% of catalog, search and cart responses within 500 ms on 5,000 products; search within 1 s on 100,000 products; 50 orders of 10 simultaneous customers within a minute; 20 simultaneous orders for 5 items create exactly 5 orders |
 | `PlatformEndpointsTest` | Health check and OpenAPI document |
 
-138 tests; line coverage of the server code is about 94% (JaCoCo), the build fails below 70%. The unit tests of
-the services use in-memory repositories from `/tests` and run in milliseconds; every test that starts the
-application works with the real PostgreSQL and Redis.
+386 tests: 279 unit, 97 component and 10 system tests. Line coverage of the server code is 98.3% and branch
+coverage is 93.5% (JaCoCo), the build fails below 70% of lines. The unit tests of the services use in-memory
+repositories from `/tests` and run in milliseconds; every test that starts the application works with the real
+PostgreSQL and Redis. The results, the defects found by the tests and the validation against the requirements
+are in the [testing report](docs/lab-6/Testing_Report.md) of Laboratory Work 6.
 
 ## Requirements fulfillment
 
@@ -509,7 +514,7 @@ the code has ports (interfaces) for them and simulated implementations.
 
 ### Non-functional requirements
 
-10 of 26 requirements are met, 8 are partially met, 8 are not met yet (5 of them belong to the frontend that
+11 of 26 requirements are met, 7 are partially met, 8 are not met yet (5 of them belong to the frontend that
 does not exist yet, the others need the production environment).
 
 | Requirement | Status | Evidence or reason |
@@ -517,8 +522,8 @@ does not exist yet, the others need the production environment).
 | **4.1 Performance** | | |
 | Server response time (95% within 500 ms) | Partial | `NonFunctionalRequirementsTest`: the 95th percentile of catalog, search and cart requests is below 500 ms on 5,000 products. A load of 1,000 concurrent users was not tested |
 | Page load time | Not met | No frontend yet |
-| Search speed (1 s for 100,000 products) | Partial | PostgreSQL filters, sorts and returns only the requested page (`JdbcProductSearch`); on 5,000 products (the size of the store catalog) a search takes milliseconds. Not measured on 100,000 products: the text is searched as a substring, which scans the table, so a full-text or trigram index is the next step |
-| Peak order throughput (50 orders per minute) | Partial | 20 simultaneous checkouts are processed in less than a second in the test; a long load test was not done |
+| Search speed (1 s for 100,000 products) | Met | PostgreSQL filters, sorts and returns only the requested page (`JdbcProductSearch`). `NonFunctionalRequirementsTest`: on 100,000 products the slowest search request takes less than half a second in the test environment. The text is searched as a substring, which scans the table, so a full-text or trigram index is the next step before the catalog grows further |
+| Peak order throughput (50 orders per minute) | Partial | `NonFunctionalRequirementsTest`: 50 checkouts of 10 simultaneous customers are processed in about a second; a long load test was not done |
 | **4.2 Scalability** | | |
 | Adding servers | Partial | The application is stateless: no session (JWT), all data in PostgreSQL and Redis, order numbers from a database sequence, row locks instead of in-process locks. Running several instances behind a load balancer was not tested |
 | Data volume | Partial | Data is stored in PostgreSQL with indexes on the lookup columns. The catalog search, the order list, the user search, the audit log and the sales statistics are SQL queries that return one page or one aggregate. Only the product list of the Management Panel is still returned as a whole. Not tested with 100,000 products and 1,000,000 orders |
@@ -540,7 +545,7 @@ does not exist yet, the others need the production environment).
 | Price and date format | Partial | Prices are in UAH with two decimal places; dates are sent in ISO 8601, the DD.MM.YYYY format is the task of the frontend |
 | Clear error messages | Met | Validation errors list every field with a plain message (`fieldErrors`); all errors have one format |
 | **4.7 Maintainability** | | |
-| Test coverage 70% | Met | About 94% of lines; `./gradlew build` fails below 70% (`jacocoTestCoverageVerification`) |
+| Test coverage 70% | Met | 98.3% of lines; `./gradlew build` fails below 70% (`jacocoTestCoverageVerification`) |
 | CI and code review | Met | GitHub Actions builds and tests every pull request; a pull request is merged by the other team member |
 | API documentation | Met | OpenAPI 3 document `/v3/api-docs` and Swagger UI, generated by springdoc from the code |
 | Logging and monitoring | Met | Application log (including sent emails), health check endpoint used by Docker and CI |
@@ -628,6 +633,7 @@ Branches of Lab 6 (testing and validation, in merge order):
 | `feature/domain-unit-tests` | Maksym | Ivan | Test levels as Gradle tasks; unit tests of the domain rules of cart, stock, catalog, orders and payments; fixes of the three defects they found |
 | `feature/storage-component-tests` | Maksym | Ivan | Component tests of the catalog, stock, order and payment storage, of the checkout transaction and of the database schema on PostgreSQL in Testcontainers |
 | `feature/account-component-tests` | Ivan | Maksym | Unit tests of accounts, passwords, reviews and settings; component tests on Redis and PostgreSQL in Testcontainers; contract tests of the REST API; fixes of the three defects they found |
+| `feature/system-testing` | Ivan | Maksym | System tests of user scenarios, checks of the search speed and of the order throughput, the testing report with validation and recommendations |
 
 ## Roadmap
 

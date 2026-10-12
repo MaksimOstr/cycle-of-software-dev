@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.cycleofsoftwaredev.catalog.application.CategoryService;
@@ -26,6 +27,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -46,6 +48,8 @@ class NonFunctionalRequirementsTest {
 
     private static final int CATALOG_SIZE = 5_000;
     private static final Duration RESPONSE_TIME_LIMIT = Duration.ofMillis(500);
+    private static final int LARGE_CATALOG_SIZE = 100_000;
+    private static final Duration SEARCH_TIME_LIMIT = Duration.ofSeconds(1);
 
     @Autowired
     private MockMvc mvc;
@@ -150,6 +154,88 @@ class NonFunctionalRequirementsTest {
         assertThat(statuses).filteredOn(status -> status == 201).hasSize(5);
         assertThat(statuses).filteredOn(status -> status == 409).hasSize(15);
         assertThat(inventory.availableQuantity(variantId)).isZero();
+    }
+
+    /** NFR "Search speed": search results are returned within 1 second for a catalog of 100,000 products. */
+    @Test
+    void searchAnswersWithinOneSecondOnACatalogOfOneHundredThousandProducts(TestReporter reporter) throws Exception {
+        Category category = categories.createCategory("Large catalog " + System.nanoTime(), null);
+        performanceCategoryId = category.id();
+        jdbc.update("""
+                INSERT INTO catalog.products (id, name, description, category_id, active)
+                SELECT gen_random_uuid(), 'Item ' || n, 'Description of item ' || n, ?, true
+                FROM generate_series(1, ?) AS n""", category.id(), LARGE_CATALOG_SIZE);
+        jdbc.update("""
+                INSERT INTO catalog.product_variants (product_id, position, id, sku, name, price)
+                SELECT p.id, 0, gen_random_uuid(), 'BIG-' || p.id, 'default', (10 + random() * 9990)::numeric(12, 2)
+                FROM catalog.products p WHERE p.category_id = ?""", category.id());
+        jdbc.update("""
+                INSERT INTO inventory.stock_items (variant_id, on_hand, reserved, low_stock_threshold)
+                SELECT v.id, 100, 0, 5 FROM catalog.product_variants v
+                JOIN catalog.products p ON p.id = v.product_id WHERE p.category_id = ?""", category.id());
+        jdbc.execute("ANALYZE catalog.products");
+        jdbc.execute("ANALYZE catalog.product_variants");
+
+        List<MockHttpServletRequestBuilder> searches = List.of(
+                get("/api/v1/products").param("query", "item 99999"),                       // one product
+                get("/api/v1/products").param("query", "description of item 5000"),         // text of the description
+                get("/api/v1/products").param("query", "item").param("sort", "PRICE_ASC"),  // every product, sorted by price
+                get("/api/v1/products").param("query", "item").param("sort", "PRICE_DESC").param("page", "2000"),
+                get("/api/v1/products").param("categoryId", category.id().toString()).param("page", "4000"),
+                get("/api/v1/products").param("query", "no such product"));
+        for (MockHttpServletRequestBuilder search : searches) {
+            timeOf(search); // the first execution of a query plans it and loads the pages of the table
+        }
+
+        Duration slowest = Duration.ZERO;
+        for (int round = 0; round < 5; round++) {
+            for (MockHttpServletRequestBuilder search : searches) {
+                Duration time = timeOf(search);
+                slowest = time.compareTo(slowest) > 0 ? time : slowest;
+            }
+        }
+
+        reporter.publishEntry("slowest search on 100,000 products, ms", Long.toString(slowest.toMillis()));
+        // the database is shared with the other test classes, so only the products of this category are counted
+        mvc.perform(get("/api/v1/products").param("query", "item").param("sort", "PRICE_ASC")
+                        .param("categoryId", category.id().toString()))
+                .andExpect(jsonPath("$.totalItems").value(LARGE_CATALOG_SIZE))
+                .andExpect(jsonPath("$.items.length()").value(24));
+        assertThat(slowest).isLessThan(SEARCH_TIME_LIMIT);
+    }
+
+    /** NFR "Peak order throughput": the system processes at least 50 orders per minute. */
+    @Test
+    void fiftyOrdersOfTenSimultaneousCustomersAreProcessedWithinAMinute(TestReporter reporter) throws Exception {
+        Category category = categories.createCategory("Sale " + System.nanoTime(), null);
+        Product product = products.createProduct("Sale item", "", category.id());
+        UUID variantId = products.addVariant(product.id(), "SALE-" + System.nanoTime(), "default", Money.of("100")).id();
+        inventory.setStock(variantId, 1000);
+        List<Callable<Integer>> checkouts = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            String cartId = JsonPath.read(mvc.perform(post("/api/v1/carts")).andReturn().getResponse().getContentAsString(), "$.cartId");
+            mvc.perform(post("/api/v1/carts/" + cartId + "/items").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"variantId\":\"" + variantId + "\",\"quantity\":2}")).andExpect(status().isOk());
+            String order = """
+                    {"cartId":"%s","fullName":"Sale Customer","email":"sale%d@example.com","phone":"+380501234567",
+                     "deliveryMethod":"NOVA_POSHTA","deliveryAddress":"Kyiv, branch 12","paymentMethod":"CARD_ONLINE"}""".formatted(cartId, i);
+            checkouts.add(() -> mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(order)
+                    .header("Idempotency-Key", UUID.randomUUID().toString())).andReturn().getResponse().getStatus());
+        }
+
+        long start = System.nanoTime();
+        List<Integer> statuses = new ArrayList<>();
+        try (ExecutorService executor = Executors.newFixedThreadPool(10)) {
+            for (Future<Integer> result : executor.invokeAll(checkouts)) {
+                statuses.add(result.get());
+            }
+        }
+        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+
+        reporter.publishEntry("50 checkouts of 10 simultaneous customers, ms", Long.toString(elapsed.toMillis()));
+        assertThat(statuses).hasSize(50).containsOnly(201);
+        assertThat(inventory.availableQuantity(variantId)).isEqualTo(900);
+        assertThat(elapsed).isLessThan(Duration.ofMinutes(1));
     }
 
     private Duration timeOf(MockHttpServletRequestBuilder request) throws Exception {
