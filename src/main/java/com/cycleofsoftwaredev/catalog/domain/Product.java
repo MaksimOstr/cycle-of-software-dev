@@ -55,9 +55,10 @@ public class Product {
         if (newName == null || newName.isBlank()) {
             throw new IllegalArgumentException("Product name must not be blank");
         }
+        // everything is checked before the first field is changed
+        this.categoryId = Objects.requireNonNull(newCategoryId);
         this.name = newName.trim();
         this.description = newDescription == null ? "" : newDescription.trim();
-        this.categoryId = Objects.requireNonNull(newCategoryId);
     }
 
     public ProductVariant addVariant(String sku, String variantName, Money price) {

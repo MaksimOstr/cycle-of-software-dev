@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,6 +38,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Checks of the non-functional requirements that can be measured automatically on the integrated system.
  * They run on the real PostgreSQL started by Testcontainers.
  */
+@Tag("system")
 @Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc

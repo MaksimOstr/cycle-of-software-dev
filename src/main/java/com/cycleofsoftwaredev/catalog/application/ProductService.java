@@ -7,6 +7,7 @@ import com.cycleofsoftwaredev.catalog.domain.ProductRepository;
 import com.cycleofsoftwaredev.catalog.domain.ProductSearch;
 import com.cycleofsoftwaredev.catalog.domain.ProductSort;
 import com.cycleofsoftwaredev.catalog.domain.ProductVariant;
+import com.cycleofsoftwaredev.shared.domain.BusinessRuleException;
 import com.cycleofsoftwaredev.shared.domain.Money;
 import com.cycleofsoftwaredev.shared.domain.NotFoundException;
 import java.util.List;
@@ -62,6 +63,10 @@ public class ProductService implements CatalogApi {
 
     public ProductVariant addVariant(UUID productId, String sku, String variantName, Money price) {
         Product product = getProduct(productId);
+        // requirement "Product variants": the article number belongs to one variant in the whole catalog
+        if (sku != null && products.existsByVariantSku(sku)) {
+            throw new BusinessRuleException("Variant with SKU " + sku + " already exists");
+        }
         ProductVariant variant = product.addVariant(sku, variantName, price);
         products.save(product);
         return variant;

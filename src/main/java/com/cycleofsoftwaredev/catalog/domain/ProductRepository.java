@@ -12,6 +12,9 @@ public interface ProductRepository {
 
     Optional<Product> findByVariantId(UUID variantId);
 
+    /** True if a variant of any product already has this article number; the letter case is ignored. */
+    boolean existsByVariantSku(String sku);
+
     List<Product> findAll();
 
     boolean existsByCategoryId(UUID categoryId);

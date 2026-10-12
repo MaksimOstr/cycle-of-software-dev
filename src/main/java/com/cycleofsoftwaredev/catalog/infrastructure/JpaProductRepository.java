@@ -14,4 +14,8 @@ public interface JpaProductRepository extends JpaRepository<Product, UUID>, Prod
     @Override
     @Query("select p from Product p join p.variants v where v.id = :variantId")
     Optional<Product> findByVariantId(@Param("variantId") UUID variantId);
+
+    @Override
+    @Query("select count(p) > 0 from Product p join p.variants v where lower(v.sku) = lower(:sku)")
+    boolean existsByVariantSku(@Param("sku") String sku);
 }

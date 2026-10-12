@@ -42,4 +42,34 @@ class MoneyTest {
 
         assertThatThrownBy(() -> hryvnias.add(euros)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void percentIsRoundedHalfUpToKopecks() {
+        assertThat(Money.of("0.05").percent(50)).isEqualTo(Money.of("0.03"));
+        assertThat(Money.of("33.33").percent(33)).isEqualTo(Money.of("11.00"));
+        assertThat(Money.of("999.99").percent(1)).isEqualTo(Money.of("10.00"));
+        assertThat(Money.of("100").percent(0)).isEqualTo(Money.zero());
+    }
+
+    @Test
+    void amountAndCurrencyAreRequired() {
+        assertThatThrownBy(() -> new Money(null, Money.UAH)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Money(BigDecimal.ONE, " ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new Money(BigDecimal.ONE, null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void amountsWithDifferentNumberOfDecimalsAreEqual() {
+        assertThat(Money.of("10")).isEqualTo(Money.of("10.00")).hasSameHashCodeAs(Money.of("10.0"));
+        assertThat(Money.of("10.5")).hasToString("10.50 UAH");
+    }
+
+    @Test
+    void isOrderedByAmount() {
+        assertThat(Money.of("5")).isLessThan(Money.of("5.01")).isGreaterThan(Money.zero());
+        assertThat(Money.of("5").subtract(Money.of("7.50")).isNegative()).isTrue();
+        assertThat(Money.of("5").isZero()).isFalse();
+        assertThatThrownBy(() -> Money.of("5").compareTo(new Money(BigDecimal.ONE, "EUR")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -43,6 +44,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Ordering -> Cart, Delivery, Inventory and Payment, Delivery -> Administration (settings),
  * Reviews -> Ordering, Notification and Audit log <- domain events of the other modules.
  */
+@Tag("system")
 @Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc

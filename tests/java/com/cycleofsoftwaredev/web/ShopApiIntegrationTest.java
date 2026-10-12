@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +34,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** End-to-end scenario through the REST API: catalog, cart, checkout, payment webhook, order management. */
+@Tag("component")
 @Import(TestInfrastructure.class)
 @SpringBootTest(properties = "shopsphere.demo-data.enabled=false")
 @AutoConfigureMockMvc
