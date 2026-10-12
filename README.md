@@ -413,6 +413,7 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | Test | What it checks |
 |------|----------------|
 | `MoneyTest`, `OrderTest` | Value object arithmetic; every transition of the order state machine (Lab 2, Figure 8) |
+| `UserTest`, `PasswordRulesTest`, `ReviewTest`, `StoreSettingsTest` | Rules of the domain objects: email and name of a user, account lock after 5 failed logins, password policy and PBKDF2 hashing, rating and text of a review, moderation, delivery settings, audit record |
 | `CartTest`, `PromoCodeTest`, `StockItemTest`, `ProductTest`, `OrderDetailsTest`, `PaymentTest` | Rules of the domain objects: quantity limits of a cart, discount rounding and limits of a promo code, stock arithmetic and the low-stock threshold, product and variant data, contacts and delivery of an order, payment statuses |
 | `RegistrationServiceTest`, `AccountSecurityTest`, `UserManagementServiceTest`, `ProductServiceTest`, `InventoryServiceTest`, `CartServiceTest`, `PaymentServiceTest`, `ReviewServiceTest`, `NotificationServiceTest`, `AdministrationTest`, `SalesReportServiceTest`, `DeliveryServiceTest` | Use cases of each module |
 | `CheckoutServiceTest`, `OrderServiceTest` | Checkout and payment scenarios of Lab 2, Figures 6 and 7: idempotency, stock reservation, unpaid order expiry, late payment refund, cancellation, return |
@@ -424,6 +425,9 @@ Every error, including malformed JSON and unknown paths, is returned in one form
 | `CartPersistenceTest` | Carts in PostgreSQL: items keep their order, abandoned guest carts are removed after 30 days |
 | `CatalogStorageTest`, `InventoryStorageTest`, `OrderStorageTest`, `PaymentStorageTest` | Storage of the modules in PostgreSQL (Testcontainers): data is read back as it was saved, unique article number, idempotency key and one payment per order, constraints of the tables, order list and sales statistics in SQL, row locks for 20 simultaneous reservations, unique order numbers |
 | `CheckoutTransactionTest` | Ordering, Cart, Inventory and Payment in one database transaction: a checkout that fails at the payment provider leaves no order, no reservation and a full cart; payment notification, expiry of an unpaid order, refund of a late payment |
+| `AccountStorageTest`, `ReviewAndAdministrationStorageTest` | Users, password reset tokens, reviews, audit log and store settings in PostgreSQL (Testcontainers): unique email, the counter of failed logins is saved although the login is rejected, user search in SQL, one review per product and customer, newest audit records first, one row of settings |
+| `RedisSecurityStorageTest` | Refresh tokens and the login limit in Redis (Testcontainers): only the hash of a token is stored, a token expires by itself and works once for 16 simultaneous requests, the counter of an address expires |
+| `ApiContractTest` | Contract of the REST API: HTTP status and JSON format of the catalog, cart, checkout, management and administration endpoints; 400, 401, 403, 404, 409 and 415 answers in the uniform error format |
 | `DatabaseSchemaTest` | Liquibase changelog on an empty database: every change is applied, one schema per module, indexes of the lookups |
 | `ProductSearchPostgresTest` | Catalog search executed by PostgreSQL: text in name and description, category with subcategories, sorting, paging, special characters |
 | `SystemIntegrationTest` | Integration of all modules: a cash order from catalog to review and a card order with payment, cancellation and refund; emails, sales report and audit log |
@@ -623,6 +627,7 @@ Branches of Lab 6 (testing and validation, in merge order):
 |--------|--------|----------|--------|
 | `feature/domain-unit-tests` | Maksym | Ivan | Test levels as Gradle tasks; unit tests of the domain rules of cart, stock, catalog, orders and payments; fixes of the three defects they found |
 | `feature/storage-component-tests` | Maksym | Ivan | Component tests of the catalog, stock, order and payment storage, of the checkout transaction and of the database schema on PostgreSQL in Testcontainers |
+| `feature/account-component-tests` | Ivan | Maksym | Unit tests of accounts, passwords, reviews and settings; component tests on Redis and PostgreSQL in Testcontainers; contract tests of the REST API; fixes of the three defects they found |
 
 ## Roadmap
 

@@ -7,6 +7,7 @@ import com.cycleofsoftwaredev.shared.domain.Actor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
@@ -36,7 +37,8 @@ public class ReviewController {
     public record ReviewRequest(@Min(1) @Max(5) int rating, @Size(max = 2000) String text) {
     }
 
-    public record ModerationRequest(boolean approved) {
+    /** The decision is required: a request without it must not be read as a rejection. */
+    public record ModerationRequest(@NotNull Boolean approved) {
     }
 
     public record ReviewResponse(UUID id, UUID productId, int rating, String text, ReviewStatus status, Instant createdAt) {
@@ -62,7 +64,7 @@ public class ReviewController {
 
     @PatchMapping("/management/reviews/{reviewId}")
     public ReviewResponse moderate(@PathVariable UUID reviewId,
-                                   @RequestBody ModerationRequest request) {
+                                   @Valid @RequestBody ModerationRequest request) {
         currentUser.requireStaff();
         return ReviewResponse.of(reviews.moderate(reviewId, request.approved()));
     }

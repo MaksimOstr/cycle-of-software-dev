@@ -7,6 +7,7 @@ import com.cycleofsoftwaredev.cart.domain.PromoCode;
 import com.cycleofsoftwaredev.inventory.application.InventoryService;
 import com.cycleofsoftwaredev.inventory.domain.StockItem;
 import com.cycleofsoftwaredev.shared.domain.Money;
+import com.cycleofsoftwaredev.shared.domain.NotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Future;
@@ -155,6 +156,8 @@ public class ManagementCatalogController {
     public StockResponse setStock(@PathVariable UUID variantId,
                                   @Valid @RequestBody StockRequest request) {
         currentUser.requireStaff();
+        // the stock is kept only for variants of the catalog
+        products.findVariant(variantId).orElseThrow(() -> new NotFoundException("Product variant", variantId));
         StockItem item = inventory.setStock(variantId, request.onHand());
         return new StockResponse(item.variantId(), item.onHand(), item.reserved(), item.available(), item.isLowStock());
     }
